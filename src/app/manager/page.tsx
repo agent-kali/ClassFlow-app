@@ -1,56 +1,76 @@
 "use client";
 
-import { TopBar } from "@/components/TopBar";
-import { SchoolChip } from "@/components/SchoolChip";
-import { useLessons, useLookups, useToday } from "@/data/hooks";
-import { formatRange, weekDates } from "@/domain/time";
+import { useMemo } from "react";
 import { format, parseISO } from "date-fns";
+import { TopBar } from "@/components/TopBar";
+import { ClientOnly } from "@/components/ClientOnly";
+import { useConflicts, useLessons, useLookups, useToday } from "@/data/hooks";
+import { weekDates } from "@/domain/time";
+import { WeekTimeline } from "@/features/manager/WeekTimeline";
+import { FilterRail } from "@/features/manager/FilterRail";
+import { useFilteredLessons, useScheduleFilters } from "@/features/manager/filters";
 
-/** Increment 1 placeholder: proves the data layer end to end. Replaced by the week timeline. */
 export default function ManagerPage() {
+  return (
+    <ClientOnly>
+      <ManagerScreen />
+    </ClientOnly>
+  );
+}
+
+function ManagerScreen() {
   const lessons = useLessons();
   const today = useToday();
-  const { classGroupsById, roomsById, teachersById, schoolOfRoom, campusOfRoom } = useLookups();
-  const days = weekDates(parseISO(today));
+  const lookups = useLookups();
+  const { conflicts, byLesson } = useConflicts();
+  const { filters, toggle, clear, isActive } = useScheduleFilters();
+  const filtered = useFilteredLessons(lessons, filters, lookups);
+
+  const days = useMemo(() => weekDates(parseISO(today)), [today]);
+  const weekLabel = `${format(parseISO(days[0]), "d MMM")} – ${format(parseISO(days[6]), "d MMM yyyy")}`;
+
+  const overlapCount = conflicts.filter((c) => c.type === "overlap").length;
+  const travelCount = conflicts.filter((c) => c.type === "travel").length;
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div className="flex h-dvh flex-col">
       <TopBar />
-      <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-6">
-        <h1 className="mb-4 text-lg font-semibold">This week</h1>
-        {days.map((date) => {
-          const dayLessons = lessons
-            .filter((l) => l.date === date)
-            .sort((a, b) => a.startMin - b.startMin);
-          if (dayLessons.length === 0) return null;
-          return (
-            <section key={date} className="mb-6">
-              <h2 className="cf-mono mb-2 text-xs font-semibold uppercase tracking-wide text-ink-mute">
-                {format(parseISO(date), "EEE dd/MM")}
-                {date === today && <span className="ml-2 text-accent">today</span>}
-              </h2>
-              <ul className="divide-y divide-line-soft rounded border border-line bg-surface">
-                {dayLessons.map((l) => (
-                  <li key={l.id} className="flex items-center gap-3 px-3 py-2 text-sm">
-                    <span className="cf-mono w-28 shrink-0 text-ink-mute">
-                      {formatRange(l.startMin, l.endMin)}
-                    </span>
-                    <SchoolChip school={schoolOfRoom(l.roomId)} />
-                    <span className="cf-mono font-semibold">{classGroupsById.get(l.classGroupId)?.code}</span>
-                    <span className="text-ink-mute">
-                      {roomsById.get(l.roomId)?.name} · {campusOfRoom(l.roomId)?.name}
-                    </span>
-                    <span className="cf-mono ml-auto">{teachersById.get(l.teacherId)?.code}</span>
-                    {l.status !== "scheduled" && (
-                      <span className="cf-mono text-xs uppercase text-danger">{l.status}</span>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            </section>
-          );
-        })}
-      </main>
+
+      <div className="flex items-center gap-3 border-b border-line bg-surface px-4 py-1.5">
+        <h1 className="cf-mono text-[13px] font-semibold">{weekLabel}</h1>
+        <div className="flex items-center gap-1.5">
+          {overlapCount > 0 && (
+            <span
+              className="cf-mono rounded-sm px-1.5 py-0.5 text-[11px] font-semibold"
+              style={{ background: "var(--danger-soft)", color: "var(--danger)" }}
+            >
+              {overlapCount} double-booking{overlapCount > 1 ? "s" : ""}
+            </span>
+          )}
+          {travelCount > 0 && (
+            <span
+              className="cf-mono rounded-sm px-1.5 py-0.5 text-[11px] font-semibold"
+              style={{ background: "var(--warn-soft)", color: "var(--warn)" }}
+            >
+              {travelCount} tight travel gap{travelCount > 1 ? "s" : ""}
+            </span>
+          )}
+          {overlapCount === 0 && travelCount === 0 && (
+            <span className="cf-mono text-[11px] text-ink-faint">No conflicts</span>
+          )}
+        </div>
+      </div>
+
+      <div className="flex min-h-0 flex-1">
+        <FilterRail filters={filters} toggle={toggle} clear={clear} isActive={isActive} />
+        <WeekTimeline
+          lessons={filtered}
+          allLessons={lessons}
+          today={today}
+          lookups={lookups}
+          conflictsByLesson={byLesson}
+        />
+      </div>
     </div>
   );
 }
