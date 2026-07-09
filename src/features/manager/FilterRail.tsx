@@ -10,19 +10,36 @@ interface Props {
   toggle: (key: keyof ScheduleFilters, id: string) => void;
   clear: () => void;
   isActive: boolean;
+  /** Below md the rail is a drawer, toggled from the toolbar. */
+  mobileOpen: boolean;
+  onMobileClose: () => void;
 }
 
 /**
  * The narrowing rail. Nothing is required: the default view is everything,
  * and each chip subtracts. Selected chips carry the school's hue.
  */
-export function FilterRail({ filters, toggle, clear, isActive }: Props) {
+export function FilterRail({ filters, toggle, clear, isActive, mobileOpen, onMobileClose }: Props) {
   const schools = useSchools();
   const campuses = useCampuses();
   const teachers = useTeachers();
 
   return (
-    <aside className="flex w-48 shrink-0 flex-col gap-4 overflow-y-auto border-r border-line bg-surface px-3 py-3">
+    <>
+      {mobileOpen && (
+        <button
+          type="button"
+          aria-label="Close filters"
+          onClick={onMobileClose}
+          className="fixed inset-0 z-30 bg-black/30 md:hidden"
+        />
+      )}
+      <aside
+        className={`${
+          mobileOpen ? "fixed inset-y-0 left-0 z-40 flex w-60" : "hidden"
+        } shrink-0 flex-col gap-4 overflow-y-auto border-r border-line bg-surface px-3 py-3 md:static md:z-auto md:flex md:w-48`}
+        style={mobileOpen ? { boxShadow: "var(--shadow-pop)" } : undefined}
+      >
       <div>
         <div className="mb-1.5 flex items-baseline justify-between">
           <h2 className="text-[11px] font-semibold uppercase tracking-wide text-ink-mute">
@@ -117,6 +134,7 @@ export function FilterRail({ filters, toggle, clear, isActive }: Props) {
           })}
         </ul>
       </div>
-    </aside>
+      </aside>
+    </>
   );
 }

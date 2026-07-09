@@ -40,6 +40,7 @@ function ManagerScreen() {
   const [createPrefill, setCreatePrefill] = useState<CreatePrefill | null>(null);
   const [importing, setImporting] = useState(false);
   const [anchorDate, setAnchorDate] = useState(today);
+  const [railOpen, setRailOpen] = useState(false);
 
   const days = useMemo(() => weekDates(parseISO(anchorDate)), [anchorDate]);
   const weekLabel = `${format(parseISO(days[0]), "d MMM")} – ${format(parseISO(days[6]), "d MMM yyyy")}`;
@@ -112,6 +113,13 @@ function ManagerScreen() {
         <div className="ml-auto flex items-center gap-2">
           <button
             type="button"
+            onClick={() => setRailOpen(true)}
+            className="rounded border border-line px-2.5 py-1 text-[12px] font-medium hover:border-ink-faint md:hidden"
+          >
+            Filters
+          </button>
+          <button
+            type="button"
             onClick={() => setImporting(true)}
             className="rounded border border-line px-2.5 py-1 text-[12px] font-medium transition-colors hover:border-ink-faint"
           >
@@ -128,7 +136,14 @@ function ManagerScreen() {
       </div>
 
       <div className="flex min-h-0 flex-1">
-        <FilterRail filters={filters} toggle={toggle} clear={clear} isActive={isActive} />
+        <FilterRail
+          filters={filters}
+          toggle={toggle}
+          clear={clear}
+          isActive={isActive}
+          mobileOpen={railOpen}
+          onMobileClose={() => setRailOpen(false)}
+        />
         <WeekTimeline
           lessons={filtered}
           allLessons={lessons}
