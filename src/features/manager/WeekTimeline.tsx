@@ -15,6 +15,8 @@ interface Props {
   lessons: Lesson[];
   /** Unfiltered lessons, used to keep the time axis stable while filtering. */
   allLessons: Lesson[];
+  /** Monday-anchored date of the week being viewed. */
+  anchorDate: string;
   today: string;
   lookups: ReturnType<typeof useLookups>;
   conflictsByLesson: Map<string, Conflict[]>;
@@ -43,6 +45,7 @@ interface DragState {
 export function WeekTimeline({
   lessons,
   allLessons,
+  anchorDate,
   today,
   lookups,
   conflictsByLesson,
@@ -51,7 +54,7 @@ export function WeekTimeline({
   onCreateRange,
   snap = (m) => m,
 }: Props) {
-  const days = useMemo(() => weekDates(parseISO(today)), [today]);
+  const days = useMemo(() => weekDates(parseISO(anchorDate)), [anchorDate]);
   const now = useNowMinute();
   const [drag, setDrag] = useState<DragState | null>(null);
 

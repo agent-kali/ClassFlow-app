@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { parseISO } from "date-fns";
+import { format, parseISO } from "date-fns";
 import { useLastPayEffect, useLessons, useTeachers, useToday } from "@/data/hooks";
 import { earningsFor } from "@/domain/earnings";
 import { weekDates } from "@/domain/time";
@@ -13,13 +13,16 @@ import { MoneyPair } from "@/components/MoneyPair";
  * When an edit changes a figure, the affected cell pulses and shows the
  * delta — the manager never has to go looking for the financial effect.
  */
-export function PayStrip() {
+export function PayStrip({ anchorDate }: { anchorDate?: string }) {
   const teachers = useTeachers();
   const lessons = useLessons();
   const today = useToday();
   const effect = useLastPayEffect();
 
-  const days = useMemo(() => weekDates(parseISO(today)), [today]);
+  const days = useMemo(
+    () => weekDates(parseISO(anchorDate ?? today)),
+    [anchorDate, today]
+  );
   const range = { from: days[0], to: days[6] };
 
   return (
@@ -29,7 +32,7 @@ export function PayStrip() {
     >
       <div className="flex shrink-0 flex-col justify-center border-r border-line px-3 py-1.5">
         <span className="text-[10px] font-semibold uppercase tracking-wide text-ink-mute">
-          This week&apos;s pay
+          Pay, week of {format(parseISO(days[0]), "d MMM")}
         </span>
         <span className="text-[10px] text-ink-faint">delivered hours only</span>
       </div>

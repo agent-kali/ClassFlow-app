@@ -17,6 +17,8 @@ export interface CreatePrefill {
 
 interface Props {
   prefill: CreatePrefill;
+  /** The week whose days the form offers; defaults to the current week. */
+  weekOf?: string;
   onClose: () => void;
   onCreated?: () => void;
 }
@@ -26,7 +28,7 @@ interface Props {
  * rooms and shows the CM field only where that school actually has CMs.
  * The pay consequence is visible before the lesson is even saved.
  */
-export function CreateLessonDialog({ prefill, onClose, onCreated }: Props) {
+export function CreateLessonDialog({ prefill, weekOf, onClose, onCreated }: Props) {
   const today = useToday();
   const lookups = useLookups();
   const classGroups = useClassGroups();
@@ -34,11 +36,11 @@ export function CreateLessonDialog({ prefill, onClose, onCreated }: Props) {
   const teachers = useTeachers();
   const { createLesson } = useLessonMutations();
 
-  const days = weekDates(parseISO(today));
+  const days = weekDates(parseISO(prefill.date ?? weekOf ?? today));
   const [classGroupId, setClassGroupId] = useState<string | null>(null);
   const [roomId, setRoomId] = useState<string | null>(null);
   const [teacherId, setTeacherId] = useState<string | null>(null);
-  const [date, setDate] = useState(prefill.date ?? today);
+  const [date, setDate] = useState(prefill.date ?? weekOf ?? today);
   const [start, setStart] = useState(formatMin(prefill.startMin ?? 9 * 60).padStart(5, "0"));
   const [end, setEnd] = useState(formatMin(prefill.endMin ?? 10 * 60).padStart(5, "0"));
   const [curriculum, setCurriculum] = useState("");

@@ -5,7 +5,7 @@ import * as Popover from "@radix-ui/react-popover";
 import { format, parseISO } from "date-fns";
 import type { Lesson } from "@/domain/types";
 import { lessonHours } from "@/domain/types";
-import { useLessonMutations, useLookups, useToday } from "@/data/hooks";
+import { useLessonMutations, useLookups } from "@/data/hooks";
 import { formatMin, formatRange, parseTime, weekDates } from "@/domain/time";
 import { MoneyPair } from "@/components/MoneyPair";
 import { SchoolChip } from "@/components/SchoolChip";
@@ -13,6 +13,8 @@ import { SchoolChip } from "@/components/SchoolChip";
 interface Props {
   lesson: Lesson;
   anchorRect: DOMRect;
+  /** The week whose days the move form offers; defaults to the lesson's week. */
+  weekOf?: string;
   onClose: () => void;
   /** Called before a pay-affecting action, so the page can flash the delta. */
   onAction?: () => void;
@@ -22,9 +24,8 @@ interface Props {
  * The manager's most frequent surface. One click opened it; cancelling is
  * one more. Rescheduling is inline — day, exact times, done.
  */
-export function LessonPopover({ lesson, anchorRect, onClose, onAction }: Props) {
+export function LessonPopover({ lesson, anchorRect, weekOf, onClose, onAction }: Props) {
   const lookups = useLookups();
-  const today = useToday();
   const { setLessonStatus, rescheduleLesson } = useLessonMutations();
 
   const [rescheduling, setRescheduling] = useState(false);
@@ -40,7 +41,7 @@ export function LessonPopover({ lesson, anchorRect, onClose, onAction }: Props) 
 
   const isOff = lesson.status !== "scheduled";
   const usd = teacher ? lessonHours(lesson) * teacher.usdRate : 0;
-  const days = weekDates(parseISO(today));
+  const days = weekDates(parseISO(weekOf ?? lesson.date));
 
   const act = (fn: () => void) => {
     onAction?.();
