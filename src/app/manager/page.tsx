@@ -1,14 +1,18 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { format, parseISO } from "date-fns";
 import { TopBar } from "@/components/TopBar";
 import { ClientOnly } from "@/components/ClientOnly";
 import { useConflicts, useLessons, useLookups, useToday } from "@/data/hooks";
-import { weekDates } from "@/domain/time";
+import type { Lesson } from "@/domain/types";
+import { snapMin, weekDates } from "@/domain/time";
 import { WeekTimeline } from "@/features/manager/WeekTimeline";
 import { FilterRail } from "@/features/manager/FilterRail";
 import { useFilteredLessons, useScheduleFilters } from "@/features/manager/filters";
+import { LessonPopover } from "@/features/manager/LessonPopover";
+import { CreateLessonDialog, type CreatePrefill } from "@/features/manager/CreateLessonDialog";
+import { PayStrip } from "@/features/manager/PayStrip";
 
 export default function ManagerPage() {
   return (
@@ -16,6 +20,11 @@ export default function ManagerPage() {
       <ManagerScreen />
     </ClientOnly>
   );
+}
+
+interface Selection {
+  lesson: Lesson;
+  rect: DOMRect;
 }
 
 function ManagerScreen() {
@@ -26,11 +35,19 @@ function ManagerScreen() {
   const { filters, toggle, clear, isActive } = useScheduleFilters();
   const filtered = useFilteredLessons(lessons, filters, lookups);
 
+  const [selection, setSelection] = useState<Selection | null>(null);
+  const [createPrefill, setCreatePrefill] = useState<CreatePrefill | null>(null);
+
   const days = useMemo(() => weekDates(parseISO(today)), [today]);
   const weekLabel = `${format(parseISO(days[0]), "d MMM")} – ${format(parseISO(days[6]), "d MMM yyyy")}`;
 
   const overlapCount = conflicts.filter((c) => c.type === "overlap").length;
   const travelCount = conflicts.filter((c) => c.type === "travel").length;
+
+  // The popover reads the live lesson so edits reflect immediately.
+  const selectedLesson = selection
+    ? lessons.find((l) => l.id === selection.lesson.id) ?? null
+    : null;
 
   return (
     <div className="flex h-dvh flex-col">
@@ -59,6 +76,15 @@ function ManagerScreen() {
             <span className="cf-mono text-[11px] text-ink-faint">No conflicts</span>
           )}
         </div>
+        <div className="ml-auto flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setCreatePrefill({})}
+            className="rounded bg-accent px-2.5 py-1 text-[12px] font-semibold text-accent-ink transition-opacity hover:opacity-90"
+          >
+            New lesson
+          </button>
+        </div>
       </div>
 
       <div className="flex min-h-0 flex-1">
@@ -69,8 +95,29 @@ function ManagerScreen() {
           today={today}
           lookups={lookups}
           conflictsByLesson={byLesson}
+          selectedLessonId={selectedLesson?.id ?? null}
+          onSelectLesson={(lesson, el) =>
+            setSelection({ lesson, rect: el.getBoundingClientRect() })
+          }
+          onCreateRange={(date, startMin, endMin) =>
+            setCreatePrefill({ date, startMin, endMin })
+          }
+          snap={snapMin}
         />
       </div>
+
+      <PayStrip />
+
+      {selectedLesson && selection && (
+        <LessonPopover
+          lesson={selectedLesson}
+          anchorRect={selection.rect}
+          onClose={() => setSelection(null)}
+        />
+      )}
+      {createPrefill && (
+        <CreateLessonDialog prefill={createPrefill} onClose={() => setCreatePrefill(null)} />
+      )}
     </div>
   );
 }
