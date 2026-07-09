@@ -1,26 +1,151 @@
 @import "tailwindcss";
 
+/*
+ * ClassFlow design tokens — "the ledger and the timetable".
+ * Warm-paper light ground and a dark ground, switchable; one saturated
+ * accent drawn from the ink of the 500,000 ₫ note. School identities are
+ * four restrained hues used for edges and chips, never for whole surfaces.
+ */
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --ground: #f5f2ea;
+  --surface: #fcfaf5;
+  --surface-raised: #ffffff;
+  --line: #dcd6c8;
+  --line-soft: #e8e3d7;
+  --ink: #23201a;
+  --ink-mute: #6f6a5e;
+  --ink-faint: #a39d8e;
+
+  --accent: #0e6d7c;
+  --accent-ink: #f2fbfc;
+  --accent-soft: #d9ecee;
+
+  --danger: #a63d2f;
+  --danger-soft: #f3e0dc;
+  --warn: #8a6d1f;
+  --warn-soft: #f0e8d0;
+  --ok: #3d6b46;
+
+  --school-teal: #0e6d7c;
+  --school-amber: #a5680f;
+  --school-plum: #7c4a72;
+  --school-moss: #5a7036;
+  --school-teal-soft: #dcecee;
+  --school-amber-soft: #f3e7d2;
+  --school-plum-soft: #eee0eb;
+  --school-moss-soft: #e4ebd6;
+
+  --shadow-pop: 0 10px 32px rgba(35, 32, 26, 0.16), 0 2px 8px rgba(35, 32, 26, 0.08);
+}
+
+[data-theme="dark"] {
+  --ground: #16181a;
+  --surface: #1d2023;
+  --surface-raised: #24282c;
+  --line: #383d42;
+  --line-soft: #2b2f33;
+  --ink: #e8e4da;
+  --ink-mute: #9b968a;
+  --ink-faint: #6b675e;
+
+  --accent: #3fb3c2;
+  --accent-ink: #0c2a2e;
+  --accent-soft: #17383d;
+
+  --danger: #d4705f;
+  --danger-soft: #3c2521;
+  --warn: #cfa544;
+  --warn-soft: #38301a;
+  --ok: #7fae88;
+
+  --school-teal: #4db4c2;
+  --school-amber: #d29a4a;
+  --school-plum: #bd85b1;
+  --school-moss: #9ab167;
+  --school-teal-soft: #1a3438;
+  --school-amber-soft: #362c1b;
+  --school-plum-soft: #34252f;
+  --school-moss-soft: #272e1c;
+
+  --shadow-pop: 0 10px 32px rgba(0, 0, 0, 0.55), 0 2px 8px rgba(0, 0, 0, 0.35);
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-ground: var(--ground);
+  --color-surface: var(--surface);
+  --color-raised: var(--surface-raised);
+  --color-line: var(--line);
+  --color-line-soft: var(--line-soft);
+  --color-ink: var(--ink);
+  --color-ink-mute: var(--ink-mute);
+  --color-ink-faint: var(--ink-faint);
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-accent-soft: var(--accent-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
+  --color-ok: var(--ok);
+  --font-sans: var(--font-plex-sans);
+  --font-mono: var(--font-plex-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  background: var(--ground);
+  color: var(--ink);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-plex-sans), system-ui, sans-serif;
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Codes, times, and money are always set in the mono face with tabular figures. */
+.cf-mono {
+  font-family: var(--font-plex-mono), ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+/* School identity hooks — resolved from data, applied as CSS vars. */
+.school-teal { --school: var(--school-teal); --school-soft: var(--school-teal-soft); }
+.school-amber { --school: var(--school-amber); --school-soft: var(--school-amber-soft); }
+.school-plum { --school: var(--school-plum); --school-soft: var(--school-plum-soft); }
+.school-moss { --school: var(--school-moss); --school-soft: var(--school-moss-soft); }
+
+/* Ambient pay delta flash. */
+@keyframes cf-delta-in {
+  0% { opacity: 0; transform: translateY(4px); }
+  12% { opacity: 1; transform: translateY(0); }
+  80% { opacity: 1; }
+  100% { opacity: 0; transform: translateY(-6px); }
+}
+.cf-delta {
+  animation: cf-delta-in 2.6s ease-out forwards;
+}
+
+@keyframes cf-pulse {
+  0% { background-color: var(--accent-soft); }
+  100% { background-color: transparent; }
+}
+.cf-pulse {
+  animation: cf-pulse 1.4s ease-out forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  .cf-delta { animation: none; opacity: 1; }
+  .cf-pulse { animation: none; }
+}
+
+::selection {
+  background: var(--accent);
+  color: var(--accent-ink);
 }
