@@ -37,6 +37,21 @@
   --school-moss-soft: #e4ebd6;
 
   --shadow-pop: 0 10px 32px rgba(35, 32, 26, 0.16), 0 2px 8px rgba(35, 32, 26, 0.08);
+
+  /* Card interaction tokens — reuse palette; do not invent new hues. */
+  --card-border: var(--line-soft);
+  --card-bg: var(--surface-raised);
+  --card-shadow: 0 1px 3px rgba(35, 32, 26, 0.1);
+  --card-border-hover: var(--line);
+  --card-shadow-hover: 0 3px 10px rgba(35, 32, 26, 0.18);
+  --card-border-selected: var(--accent);
+  --card-bg-selected: color-mix(in srgb, var(--accent-soft) 50%, var(--surface-raised));
+  --card-ring-focus: 0 0 0 2px var(--surface-raised), 0 0 0 4px var(--accent);
+  --card-border-conflict: var(--warn);
+  --card-bg-conflict: color-mix(in srgb, var(--warn-soft) 45%, var(--surface-raised));
+  --card-border-cancelled: var(--line);
+  --card-bg-cancelled: var(--surface);
+  --card-opacity-cancelled: 0.75;
 }
 
 [data-theme="dark"] {
@@ -69,6 +84,9 @@
   --school-moss-soft: #272e1c;
 
   --shadow-pop: 0 10px 32px rgba(0, 0, 0, 0.55), 0 2px 8px rgba(0, 0, 0, 0.35);
+
+  --card-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  --card-shadow-hover: 0 3px 10px rgba(0, 0, 0, 0.55);
 }
 
 @theme inline {
@@ -110,11 +128,231 @@ body {
   letter-spacing: -0.01em;
 }
 
+/*
+ * Adaptive lesson card — size buckets via container queries.
+ * Tiers drop whole fields bottom-up; never mid-token ellipsis on time/codes/badges.
+ *   micro  (default / very short): T1 only — color spine + code + start, stacked
+ *   narrow (≥36×32):  + T2 teacher  (covers 1/3-column lanes)
+ *   medium (≥88×46):  + T3 room (+CM when wide enough)
+ *   full   (≥118×60): + T4 curriculum
+ */
+.cf-lesson {
+  container-type: size;
+  container-name: lesson;
+}
+
+.cf-lesson__body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  height: 100%;
+  padding: 2px 5px;
+  overflow: hidden;
+}
+
+.cf-lesson__t1 {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0;
+  min-width: 0;
+  line-height: 1.15;
+}
+
+.cf-lesson__code {
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.cf-lesson__time {
+  font-size: 9px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.cf-lesson__flag {
+  display: none;
+  margin-left: auto;
+  flex-shrink: 0;
+  border-radius: 2px;
+  padding: 0 3px;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  white-space: nowrap;
+  line-height: 1.4;
+}
+
+.cf-lesson__t2,
+.cf-lesson__t3,
+.cf-lesson__t4 {
+  display: none;
+  min-width: 0;
+  line-height: 1.15;
+}
+
+.cf-lesson__t2 {
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.cf-lesson__t3 {
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+}
+
+.cf-lesson__room {
+  white-space: nowrap;
+  border-radius: 3px;
+  padding: 0 3px;
+  font-size: 10px;
+}
+
+.cf-lesson__cm {
+  display: none;
+  white-space: nowrap;
+  font-size: 10px;
+}
+
+.cf-lesson__t4 {
+  font-size: 10px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+/* Narrow+: show teacher; keep T1 stacked so code + time stay whole tokens. */
+@container lesson (min-width: 36px) and (min-height: 32px) {
+  .cf-lesson__t2 {
+    display: block;
+  }
+}
+
+/* Side-by-side T1 once the lane can hold code + time on one row. */
+@container lesson (min-width: 72px) {
+  .cf-lesson__t1 {
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: baseline;
+    gap: 5px;
+  }
+
+  .cf-lesson__code {
+    font-size: 11px;
+  }
+
+  .cf-lesson__time {
+    font-size: 10px;
+  }
+
+  .cf-lesson__flag {
+    display: inline-flex;
+  }
+
+  .cf-lesson__body {
+    padding: 3px 6px;
+    gap: 2px;
+  }
+}
+
+/* Medium: room badge. */
+@container lesson (min-width: 88px) and (min-height: 44px) {
+  .cf-lesson__t3 {
+    display: flex;
+  }
+}
+
+/* CM only when the badge row has room for a full "+XXX" token. */
+@container lesson (min-width: 112px) {
+  .cf-lesson__cm {
+    display: inline;
+  }
+}
+
+/* Full: curriculum / material line. */
+@container lesson (min-width: 118px) and (min-height: 58px) {
+  .cf-lesson__t4 {
+    display: block;
+  }
+
+  .cf-lesson__body {
+    padding: 4px 6px;
+  }
+}
+
 /* School identity hooks — resolved from data, applied as CSS vars. */
 .school-teal { --school: var(--school-teal); --school-soft: var(--school-teal-soft); }
 .school-amber { --school: var(--school-amber); --school-soft: var(--school-amber-soft); }
 .school-plum { --school: var(--school-plum); --school-soft: var(--school-plum-soft); }
 .school-moss { --school: var(--school-moss); --school-soft: var(--school-moss-soft); }
+
+/*
+ * Shared lesson / list card interaction states.
+ * Schedule blocks and teacher list cards both use .cf-card + data attrs.
+ */
+.cf-card {
+  border: 1px solid var(--card-border);
+  background: var(--card-bg);
+  box-shadow: var(--card-shadow);
+  transition:
+    box-shadow 0.15s ease,
+    border-color 0.15s ease,
+    background-color 0.15s ease,
+    opacity 0.15s ease;
+}
+
+.cf-card:hover:not([data-cancelled="true"]):not([data-selected="true"]):not([data-conflict="true"]) {
+  border-color: var(--card-border-hover);
+  box-shadow: var(--card-shadow-hover);
+}
+
+.cf-card[data-selected="true"] {
+  border-color: var(--card-border-selected);
+  background: var(--card-bg-selected);
+  box-shadow: none;
+}
+
+.cf-card:focus-visible {
+  outline: none;
+  box-shadow: var(--card-ring-focus);
+  z-index: 2;
+}
+
+.cf-card[data-selected="true"]:focus-visible {
+  box-shadow: var(--card-ring-focus);
+}
+
+.cf-card[data-conflict="true"] {
+  border-color: var(--card-border-conflict);
+  background: var(--card-bg-conflict);
+  box-shadow: inset 2px 0 0 var(--warn);
+}
+
+.cf-card[data-conflict="true"][data-selected="true"] {
+  border-color: var(--card-border-selected);
+  box-shadow: inset 2px 0 0 var(--warn);
+}
+
+.cf-card[data-cancelled="true"] {
+  border-color: var(--card-border-cancelled);
+  background: var(--card-bg-cancelled);
+  box-shadow: none;
+  opacity: var(--card-opacity-cancelled);
+}
+
+.cf-card[data-cancelled="true"]:hover {
+  box-shadow: none;
+}
+
+.cf-card[data-cancelled="true"] .cf-card__time {
+  text-decoration: line-through;
+  text-decoration-color: color-mix(in srgb, var(--danger) 60%, transparent);
+  color: var(--ink-faint);
+}
+
+.cf-card[data-now="true"]:not([data-cancelled="true"]) {
+  border-color: var(--card-border-selected);
+}
 
 /* Ambient pay delta flash. */
 @keyframes cf-delta-in {
@@ -135,6 +373,34 @@ body {
   animation: cf-pulse 1.4s ease-out forwards;
 }
 
+/* Travel-gap focus: warn wash that settles, then a soft ring linger. */
+@keyframes cf-travel-pulse {
+  0% {
+    box-shadow: 0 0 0 0 var(--warn-soft), inset 0 0 0 999px color-mix(in srgb, var(--warn-soft) 70%, transparent);
+  }
+  35% {
+    box-shadow: 0 0 0 4px var(--warn-soft), inset 0 0 0 999px color-mix(in srgb, var(--warn-soft) 45%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--warn) 35%, transparent), inset 0 0 0 999px transparent;
+  }
+}
+.cf-travel-pulse {
+  animation: cf-travel-pulse 1.6s ease-out forwards;
+}
+
+/* Pay delta that rises from the edited lesson, at the point of edit. */
+@keyframes cf-delta-rise {
+  0% { opacity: 0; transform: translateY(6px) scale(0.9); }
+  14% { opacity: 1; transform: translateY(0) scale(1.04); }
+  26% { transform: translateY(0) scale(1); }
+  72% { opacity: 1; transform: translateY(-4px) scale(1); }
+  100% { opacity: 0; transform: translateY(-20px) scale(1); }
+}
+.cf-delta-rise {
+  animation: cf-delta-rise 2.4s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
@@ -142,7 +408,9 @@ body {
     transition-duration: 0.01ms !important;
   }
   .cf-delta { animation: none; opacity: 1; }
+  .cf-delta-rise { animation: none; opacity: 1; }
   .cf-pulse { animation: none; }
+  .cf-travel-pulse { animation: none; }
 }
 
 ::selection {

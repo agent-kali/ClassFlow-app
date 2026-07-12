@@ -5,16 +5,28 @@ import { format, parseISO } from "date-fns";
 import type { Lesson, Teacher } from "@/domain/types";
 import { lessonHours } from "@/domain/types";
 import { useFxRate, useLessons, useLookups } from "@/data/hooks";
-import { formatMin, formatRange, nowMinOn, weekDates } from "@/domain/time";
+import { formatMin, formatRange, nowMinOn } from "@/domain/time";
 import { usdToVnd, formatUsd, formatVnd } from "@/domain/money";
-import { SchoolChip, schoolClass } from "@/components/SchoolChip";
+import { Badge, schoolClass } from "@/components/Badge";
+import { SchoolChip } from "@/components/SchoolChip";
+import type { PeriodRange } from "./PeriodSwitcher";
 
 /**
  * One merged schedule across every school, in a single stream. Past
  * delivered lessons are settled and solid — money already earned — while
  * struck/dimmed is reserved for cancelled and no-show only.
  */
-export function TeacherStream({ teacher, today }: { teacher: Teacher; today: string }) {
+export function TeacherStream({
+  teacher,
+  today,
+  range,
+  scopeLabel,
+}: {
+  teacher: Teacher;
+  today: string;
+  range: PeriodRange;
+  scopeLabel: string;
+}) {
   const lessons = useLessons();
   const lookups = useLookups();
   const fxRate = useFxRate();
@@ -25,41 +37,68 @@ export function TeacherStream({ teacher, today }: { teacher: Teacher; today: str
     return () => clearInterval(id);
   }, []);
 
-  const days = useMemo(() => weekDates(parseISO(today)), [today]);
   const mine = useMemo(
     () =>
       lessons
-        .filter((l) => l.teacherId === teacher.id)
+        .filter(
+          (l) =>
+            l.teacherId === teacher.id &&
+            l.date >= range.from &&
+            l.date <= range.to
+        )
         .sort((a, b) => a.date.localeCompare(b.date) || a.startMin - b.startMin),
-    [lessons, teacher.id]
+    [lessons, teacher.id, range.from, range.to]
   );
+
+  const dayKeys = useMemo(() => {
+    const seen = new Set<string>();
+    const keys: string[] = [];
+    for (const l of mine) {
+      if (!seen.has(l.date)) {
+        seen.add(l.date);
+        keys.push(l.date);
+      }
+    }
+    return keys;
+  }, [mine]);
 
   return (
     <div className="flex flex-col gap-4">
-      {days.map((date) => {
+      <header className="px-1">
+        <h2 className="text-[15px] font-semibold leading-tight">
+          Delivered lessons — {scopeLabel}
+        </h2>
+        <p className="mt-0.5 text-[12px] text-ink-mute">
+          {mine.length === 0
+            ? "No lessons in this period."
+            : `${mine.length} lesson${mine.length === 1 ? "" : "s"} across ${dayKeys.length} day${dayKeys.length === 1 ? "" : "s"}`}
+        </p>
+      </header>
+
+      {dayKeys.map((date) => {
         const dayLessons = mine.filter((l) => l.date === date);
-        if (dayLessons.length === 0) return null;
         const isToday = date === today;
         const nowMin = nowMinOn(date, now);
 
         return (
           <section key={date} aria-label={format(parseISO(date), "EEEE d MMMM")}>
-            <h2 className="mb-1.5 flex items-baseline gap-2 px-1">
+            <h3 className="mb-1.5 flex items-baseline gap-2 px-1">
               <span
                 className={`cf-mono text-[12px] font-bold uppercase tracking-wide ${isToday ? "text-accent" : "text-ink-mute"}`}
               >
                 {format(parseISO(date), "EEE dd/MM")}
               </span>
               {isToday && (
-                <span className="cf-mono rounded-sm bg-accent px-1.5 text-[10px] font-bold uppercase text-accent-ink">
+                <Badge size="sm" tone="planned">
                   today
-                </span>
+                </Badge>
               )}
-            </h2>
+            </h3>
             <ol className="flex flex-col gap-1.5">
               {dayLessons.map((lesson) => {
                 const showNowBefore =
-                  nowMin !== null && nowMin < lesson.startMin &&
+                  nowMin !== null &&
+                  nowMin < lesson.startMin &&
                   dayLessons.every(
                     (o) => o.startMin >= lesson.startMin || o.endMin <= nowMin
                   );
@@ -74,7 +113,11 @@ export function TeacherStream({ teacher, today }: { teacher: Teacher; today: str
                       isPast={
                         nowMin !== null ? lesson.endMin <= nowMin : date < today
                       }
-                      isNow={nowMin !== null && nowMin >= lesson.startMin && nowMin < lesson.endMin}
+                      isNow={
+                        nowMin !== null &&
+                        nowMin >= lesson.startMin &&
+                        nowMin < lesson.endMin
+                      }
                     />
                   </Fragment>
                 );
@@ -93,9 +136,9 @@ export function TeacherStream({ teacher, today }: { teacher: Teacher; today: str
 function NowRule({ min, label }: { min: number; label?: string }) {
   return (
     <li aria-hidden className="flex items-center gap-2 px-1">
-      <span className="cf-mono rounded-sm bg-accent px-1.5 text-[10px] font-bold text-accent-ink">
+      <Badge size="sm" tone="planned">
         {formatMin(min)}
-      </span>
+      </Badge>
       <span className="h-px flex-1 bg-accent" />
       {label && <span className="text-[10px] text-accent">{label}</span>}
     </li>
@@ -128,43 +171,33 @@ function LessonCard({
 
   return (
     <li
-      className={`${schoolClass(school)} rounded-lg border p-3 ${
-        isOff
-          ? "border-line bg-surface"
-          : isNow
-            ? "border-accent bg-raised"
-            : "border-line-soft bg-raised"
-      }`}
+      data-cancelled={isOff || undefined}
+      data-now={isNow || undefined}
+      className={`${schoolClass(school)} cf-card rounded-lg p-3`}
     >
       <div className="flex items-center gap-2">
         <span
-          className={`cf-mono text-[13px] font-semibold ${isOff ? "text-ink-faint line-through decoration-danger/60" : ""}`}
+          className={`cf-card__time cf-mono text-[13px] font-semibold ${isOff ? "text-ink-faint" : ""}`}
         >
           {formatRange(lesson.startMin, lesson.endMin)}
         </span>
         <span className="cf-mono text-[11px] text-ink-mute">{durationMin}min</span>
         <span className="ml-auto flex items-center gap-1.5">
           {isNow && !isOff && (
-            <span className="cf-mono rounded-sm bg-accent px-1.5 text-[10px] font-bold uppercase text-accent-ink">
+            <Badge size="sm" tone="planned">
               now
-            </span>
+            </Badge>
           )}
           {/* Delivered = money earned: settled and solid, never dimmed. */}
           {isPast && !isOff && (
-            <span
-              className="cf-mono rounded-sm px-1.5 text-[10px] font-bold uppercase"
-              style={{ background: "var(--accent-soft)", color: "var(--ok)" }}
-            >
+            <Badge size="sm" tone="delivered">
               delivered
-            </span>
+            </Badge>
           )}
           {isOff && (
-            <span
-              className="cf-mono rounded-sm px-1.5 text-[10px] font-bold uppercase"
-              style={{ background: "var(--danger-soft)", color: "var(--danger)" }}
-            >
+            <Badge size="sm" tone="cancelled">
               {lesson.status === "cancelled" ? "cancelled" : "no-show"}
-            </span>
+            </Badge>
           )}
           <SchoolChip school={school} />
         </span>
@@ -184,19 +217,27 @@ function LessonCard({
         {lesson.weekCode && <span className="cf-mono ml-1.5 text-[11px] text-ink-mute no-underline">{lesson.weekCode}</span>}
       </p>
 
-      <div className="mt-2 flex items-baseline justify-between border-t border-line-soft pt-1.5">
-        <span className={`text-[12px] ${isOff ? "text-ink-faint" : "text-ink-mute"}`}>
-          Room <span className="cf-mono font-medium text-ink">{room?.name}</span> · {campus?.name}
+      <div className="mt-2 grid grid-cols-[minmax(0,1fr)_7.5rem] items-baseline gap-3 border-t border-line-soft pt-1.5">
+        <span className={`min-w-0 text-[12px] ${isOff ? "text-ink-faint" : "text-ink-mute"}`}>
+          Room{" "}
+          <Badge size="xs" tone="room" className={isOff ? "bg-transparent! text-ink-faint" : ""}>
+            {room?.name}
+          </Badge>{" "}
+          · {campus?.name}
           {lesson.cmName && <span> · with {lesson.cmName}</span>}
         </span>
-        <span className="cf-mono text-[11px]">
+        <span className="cf-mono text-right text-[12px] font-semibold tabular-nums">
           {isOff ? (
-            <span className="text-ink-faint">
-              <s>{formatUsd(usd)}</s> not paid
+            <span className="font-medium text-ink-faint">
+              <s>{formatUsd(usd)}</s>{" "}
+              <span className="font-normal">not paid</span>
             </span>
           ) : (
-            <span className="text-ink-mute">
-              {formatUsd(usd)} · {formatVnd(usdToVnd(usd, fxRate))}
+            <span className="text-ink">
+              {formatUsd(usd)}
+              <span className="mt-0.5 block text-[10px] font-medium text-ink-mute">
+                {formatVnd(usdToVnd(usd, fxRate))}
+              </span>
             </span>
           )}
         </span>

@@ -5,6 +5,13 @@ import { schoolClass } from "@/components/SchoolChip";
 import { formatUsd } from "@/domain/money";
 import type { ScheduleFilters } from "./filters";
 
+/** "David Okafor" → "David O." so the name fits beside the rate. */
+function shortName(name: string): string {
+  const parts = name.trim().split(/\s+/);
+  if (parts.length < 2) return name;
+  return `${parts[0]} ${parts[parts.length - 1][0]}.`;
+}
+
 interface Props {
   filters: ScheduleFilters;
   toggle: (key: keyof ScheduleFilters, id: string) => void;
@@ -123,9 +130,11 @@ export function FilterRail({ filters, toggle, clear, isActive, mobileOpen, onMob
                     on ? "bg-accent-soft font-semibold text-accent" : "hover:bg-line-soft"
                   }`}
                 >
-                  <span className="cf-mono font-semibold">{teacher.code}</span>
-                  <span className="truncate text-[12px] text-ink-mute">{teacher.name}</span>
-                  <span className="cf-mono ml-auto text-[10px] text-ink-faint">
+                  <span className="cf-mono shrink-0 font-semibold">{teacher.code}</span>
+                  <span className="min-w-0 truncate text-[12px] text-ink-mute" title={teacher.name}>
+                    {shortName(teacher.name)}
+                  </span>
+                  <span className="cf-mono ml-auto shrink-0 text-[10px] text-ink-faint">
                     {formatUsd(teacher.usdRate)}/h
                   </span>
                 </button>

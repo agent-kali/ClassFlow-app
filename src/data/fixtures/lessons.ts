@@ -1,15 +1,20 @@
+import { addDays } from "date-fns";
 import type { Lesson, LessonInput, LessonStatus } from "@/domain/types";
 import { parseTime, weekDates } from "@/domain/time";
 
 /**
- * A full, realistic teaching week, generated around "today" so the demo
- * always shows a current week. Durations are deliberately irregular
- * (35 / 45 / 60 / 70 / 90 min) and start times are off-grid — this domain
- * has no uniform slots.
+ * A full, realistic teaching week, generated around an anchor date.
+ * Durations are deliberately irregular (35 / 45 / 60 / 70 / 90 min) and
+ * start times are off-grid — this domain has no uniform slots.
  *
  * Includes: one cancellation, one no-show, one reschedule (movedFrom set),
- * and one tight campus-to-campus turnaround that should raise a travel warning.
+ * one teacher double-booking (overlap conflict), and two tight campus-to-campus
+ * turnarounds that should raise travel warnings.
  */
+
+/** Past + near-future weeks so teachers can browse months and managers can step weeks. */
+const DEMO_WEEKS_BACK = 16;
+const DEMO_WEEKS_FORWARD = 2;
 
 interface Opts {
   cm?: string;
@@ -89,6 +94,8 @@ export function buildWeekLessons(today: Date): Lesson[] {
     L(3, "16:25", "17:10", "sjs-movers", "sjs-reef", "t-kat", "Speaking: Part 2 picture story"),
     L(3, "18:00", "19:00", "lla-lp12b01b", "lla-ndc-205", "t-dav", "Prepare 5: U16 pp.92–93", { cm: "DHT", week: "W6D3" }),
     L(3, "18:00", "19:30", "iec-it201", "iec-405", "t-leo", "TOEIC RC: Part 7 double passages", { week: "D4" }),
+    // Demo overlap: LEO double-booked across campuses (conflict badge + warn border).
+    L(3, "18:30", "19:30", "sjs-sj3", "sjs-coral", "t-leo", "Cover: speaking club (double-booked)"),
     L(3, "19:30", "21:00", "iec-il401", "iec-401", "t-oli", "Speaking Part 3: abstract discussion strategies", { week: "D8" }),
 
     // ── Friday ──────────────────────────────────────────────────────────
@@ -99,6 +106,8 @@ export function buildWeekLessons(today: Date): Lesson[] {
     L(4, "16:25", "17:10", "sjs-flyers", "sjs-lagoon", "t-kat", "Listening: Part 4 note completion"),
     // Rescheduled from Thursday 17:30 — the move stays visible on the lesson.
     L(4, "17:30", "18:40", "lla-tn07b01c", "lla-thd-103", "t-mir", "Prepare 4: U11 Grammar — present perfect", { cm: "LVA", week: "W6D4", movedFrom: { day: 3, start: "17:30" } }),
+    // Return hop the same evening: THD → NDC with only 20 minutes — second travel warning.
+    L(4, "19:00", "20:00", "lla-lp09a02a", "lla-ndc-201", "t-mir", "Prepare 3: catch-up workshop", { cm: "PTM", week: "W6D4" }),
     L(4, "17:45", "19:15", "iec-il102", "iec-403", "t-oli", "IELTS Writing Task 1: charts + process diagrams", { week: "D9" }),
     L(4, "19:10", "20:40", "lla-tn11a02b", "lla-ndc-302", "t-dav", "Solutions Int: U7 Writing — formal email", { cm: "NTL", week: "W6D4" }),
 
@@ -115,6 +124,22 @@ export function buildWeekLessons(today: Date): Lesson[] {
     L(6, "9:00", "10:30", "lla-tn11a02b", "lla-ndc-302", "t-dav", "Solutions Int: U7 review + progress test", { cm: "NTL", week: "W6D6" }),
     L(6, "9:30", "11:00", "iec-il401", "iec-401", "t-oli", "Mock speaking interviews — recorded + feedback", { week: "D10" }),
   ];
+}
+
+/**
+ * Seed the store with several months of repeating weeks so period navigation
+ * on the teacher screen (and week stepping on the manager) has real data.
+ */
+export function buildDemoLessons(today: Date): Lesson[] {
+  const out: Lesson[] = [];
+  for (let w = -DEMO_WEEKS_BACK; w <= DEMO_WEEKS_FORWARD; w++) {
+    const week = buildWeekLessons(addDays(today, w * 7));
+    const tag = w < 0 ? `p${-w}` : w === 0 ? "c" : `f${w}`;
+    for (const lesson of week) {
+      out.push({ ...lesson, id: `ls-${tag}-${lesson.id.slice(3)}` });
+    }
+  }
+  return out;
 }
 
 export type { LessonInput };

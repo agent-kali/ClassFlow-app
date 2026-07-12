@@ -7,6 +7,7 @@ import type { Lesson } from "@/domain/types";
 import { lessonHours } from "@/domain/types";
 import { useLessonMutations, useLookups } from "@/data/hooks";
 import { formatMin, formatRange, parseTime, weekDates } from "@/domain/time";
+import { Badge } from "@/components/Badge";
 import { MoneyPair } from "@/components/MoneyPair";
 import { SchoolChip } from "@/components/SchoolChip";
 
@@ -77,12 +78,9 @@ export function LessonPopover({ lesson, anchorRect, weekOf, onClose, onAction }:
             <span className="cf-mono text-[15px] font-bold">{group?.code}</span>
             <SchoolChip school={school} />
             {isOff && (
-              <span
-                className="cf-mono rounded-sm px-1.5 py-0.5 text-[10px] font-bold uppercase"
-                style={{ background: "var(--danger-soft)", color: "var(--danger)" }}
-              >
+              <Badge size="sm" tone="cancelled">
                 {lesson.status}
-              </span>
+              </Badge>
             )}
           </div>
           <p className="text-[12px] text-ink-mute">

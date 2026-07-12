@@ -16,7 +16,7 @@ import { isPayable, lessonHours } from "@/domain/types";
 import { toIsoDate } from "@/domain/time";
 import { schools, campuses, rooms, classGroups } from "./fixtures/schools";
 import { teachers, captureFxRate } from "./fixtures/teachers";
-import { buildWeekLessons } from "./fixtures/lessons";
+import { buildDemoLessons } from "./fixtures/lessons";
 
 /**
  * The single in-memory source of truth. Both screens subscribe to it, so a
@@ -68,7 +68,7 @@ export const useClassFlowStore = create<ClassFlowState>((set, get) => ({
   rooms,
   teachers,
   classGroups,
-  lessons: buildWeekLessons(seedDate),
+  lessons: buildDemoLessons(seedDate),
   fxRate: captureFxRate(toIsoDate(seedDate)),
   today: toIsoDate(seedDate),
   lastPayEffect: null,

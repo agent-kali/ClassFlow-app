@@ -1,15 +1,29 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { format, parseISO } from "date-fns";
 import type { Lesson } from "@/domain/types";
 import type { Conflict } from "@/domain/conflicts";
 import type { useLookups } from "@/data/hooks";
 import { formatMin, nowMinOn, weekDates } from "@/domain/time";
 import { layoutDay } from "./laneLayout";
-import { LessonBlock, PX_PER_MIN } from "./LessonBlock";
+import { LessonBlock } from "./LessonBlock";
+import { OverflowChip } from "./OverflowChip";
+import { TravelGapChip } from "./TravelGapChip";
+import {
+  createTimeScale,
+  defaultAnchorMin,
+  findCompressibleGaps,
+  tagLessonsWithDayIndex,
+} from "./timeViewport";
 
 const GUTTER_PX = 52;
+
+export type TravelConflict = Extract<Conflict, { type: "travel" }>;
+
+export function travelGapKey(c: Pick<TravelConflict, "lessonIds">): string {
+  return `${c.lessonIds[0]}|${c.lessonIds[1]}`;
+}
 
 interface Props {
   lessons: Lesson[];
@@ -20,6 +34,10 @@ interface Props {
   today: string;
   lookups: ReturnType<typeof useLookups>;
   conflictsByLesson: Map<string, Conflict[]>;
+  travelConflicts?: TravelConflict[];
+  focusedTravelKey?: string | null;
+  travelFocusNonce?: number;
+  onFocusTravelGap?: (key: string) => void;
   selectedLessonId?: string | null;
   onSelectLesson?: (lesson: Lesson, el: HTMLElement) => void;
   /** Drag-to-create on empty ruler space (already snapped). */
@@ -42,6 +60,24 @@ interface DragState {
   currentMin: number;
 }
 
+function campusShort(name: string | undefined): string {
+  if (!name) return "?";
+  // Prefer well-known initials when the full campus name is long.
+  const parts = name.split(/\s+/);
+  if (parts.length >= 2) return parts.map((p) => p[0]).join("").slice(0, 3).toUpperCase();
+  return name.slice(0, 3).toUpperCase();
+}
+
+/** True when a minute range's midpoint sits inside a collapsed empty band. */
+function midInCollapsedGap(
+  startMin: number,
+  endMin: number,
+  gaps: { startMin: number; endMin: number }[]
+): boolean {
+  const mid = (startMin + endMin) / 2;
+  return gaps.some((g) => mid > g.startMin && mid < g.endMin);
+}
+
 export function WeekTimeline({
   lessons,
   allLessons,
@@ -49,6 +85,10 @@ export function WeekTimeline({
   today,
   lookups,
   conflictsByLesson,
+  travelConflicts = [],
+  focusedTravelKey = null,
+  travelFocusNonce = 0,
+  onFocusTravelGap,
   selectedLessonId,
   onSelectLesson,
   onCreateRange,
@@ -57,6 +97,9 @@ export function WeekTimeline({
   const days = useMemo(() => weekDates(parseISO(anchorDate)), [anchorDate]);
   const now = useNowMinute();
   const [drag, setDrag] = useState<DragState | null>(null);
+  const [expandedGaps, setExpandedGaps] = useState<Set<string>>(() => new Set());
+  const scrollerRef = useRef<HTMLDivElement>(null);
+  const anchoredWeekRef = useRef<string | null>(null);
 
   // Stable axis: fit the whole (unfiltered) week with breathing room.
   const [topMin, bottomMin] = useMemo(() => {
@@ -69,7 +112,51 @@ export function WeekTimeline({
     return [Math.floor((min - 20) / 60) * 60, Math.ceil((max + 20) / 60) * 60];
   }, [allLessons]);
 
-  const totalPx = (bottomMin - topMin) * PX_PER_MIN;
+  // Reset collapsed-band expands when the week/axis identity changes.
+  const gapEpoch = `${anchorDate}:${topMin}:${bottomMin}`;
+  const [gapEpochSeen, setGapEpochSeen] = useState(gapEpoch);
+  if (gapEpochSeen !== gapEpoch) {
+    setGapEpochSeen(gapEpoch);
+    setExpandedGaps(new Set());
+  }
+
+  const gaps = useMemo(() => {
+    const tagged = tagLessonsWithDayIndex(allLessons, days);
+    return findCompressibleGaps(topMin, bottomMin, tagged, days.length);
+  }, [allLessons, days, topMin, bottomMin]);
+
+  const lessonsById = useMemo(() => {
+    const map = new Map<string, Lesson>();
+    for (const l of lessons) map.set(l.id, l);
+    return map;
+  }, [lessons]);
+
+  // When a travel gap is focused inside a folded band, treat that band as expanded
+  // for this render so the chip exists to scroll to — without an effect setState.
+  const focusExpandedId = useMemo(() => {
+    if (!focusedTravelKey || travelFocusNonce === 0) return null;
+    const conflict = travelConflicts.find((c) => travelGapKey(c) === focusedTravelKey);
+    if (!conflict) return null;
+    const prevLesson = lessonsById.get(conflict.lessonIds[0]);
+    const nextLesson = lessonsById.get(conflict.lessonIds[1]);
+    if (!prevLesson || !nextLesson) return null;
+    const mid = (prevLesson.endMin + nextLesson.startMin) / 2;
+    const covering = gaps.find((g) => mid > g.startMin && mid < g.endMin);
+    return covering ? `${covering.startMin}-${covering.endMin}` : null;
+  }, [focusedTravelKey, travelFocusNonce, travelConflicts, lessonsById, gaps]);
+
+  const effectiveExpandedGaps = useMemo(() => {
+    if (!focusExpandedId || expandedGaps.has(focusExpandedId)) return expandedGaps;
+    const next = new Set(expandedGaps);
+    next.add(focusExpandedId);
+    return next;
+  }, [expandedGaps, focusExpandedId]);
+
+  const scale = useMemo(
+    () => createTimeScale(topMin, bottomMin, gaps, effectiveExpandedGaps),
+    [topMin, bottomMin, gaps, effectiveExpandedGaps]
+  );
+
   const hours = useMemo(() => {
     const list: number[] = [];
     for (let m = Math.ceil(topMin / 60) * 60; m <= bottomMin; m += 60) list.push(m);
@@ -84,16 +171,66 @@ export function WeekTimeline({
     return map;
   }, [lessons, days]);
 
+  const nowMin = nowMinOn(today, now);
+
+  useEffect(() => {
+    if (anchoredWeekRef.current === anchorDate) return;
+    const el = scrollerRef.current;
+    if (!el) return;
+    anchoredWeekRef.current = anchorDate;
+
+    const anchor = defaultAnchorMin(allLessons, topMin, bottomMin, nowMin, gaps);
+    const headerAir = 40;
+    el.scrollTop = Math.max(0, scale.minuteToY(anchor) - headerAir);
+  }, [anchorDate, allLessons, topMin, bottomMin, nowMin, scale, gaps]);
+
+  // Scroll focused travel gap into view (band already expanded via effectiveExpandedGaps).
+  useEffect(() => {
+    if (!focusedTravelKey || travelFocusNonce === 0) return;
+    const t = requestAnimationFrame(() => {
+      const el = scrollerRef.current?.querySelector(
+        `[data-travel-gap="${CSS.escape(focusedTravelKey)}"]`
+      );
+      el?.scrollIntoView({ block: "center", behavior: "smooth" });
+    });
+    return () => cancelAnimationFrame(t);
+  }, [focusedTravelKey, travelFocusNonce, scale.totalPx]);
+
   const minFromPointer = (e: React.PointerEvent, el: HTMLElement): number => {
     const rect = el.getBoundingClientRect();
-    const min = topMin + (e.clientY - rect.top) / PX_PER_MIN;
+    const min = scale.yToMinute(e.clientY - rect.top);
     return Math.max(topMin, Math.min(bottomMin, snap(min)));
   };
 
-  const nowMin = nowMinOn(today, now);
+  const toggleGap = (id: string) => {
+    setExpandedGaps((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const collapsedGaps = scale.segments.filter(
+    (s): s is Extract<typeof s, { kind: "gap" }> => s.kind === "gap" && s.collapsed
+  );
+  const expandedGapSegs = scale.segments.filter(
+    (s): s is Extract<typeof s, { kind: "gap" }> => s.kind === "gap" && !s.collapsed
+  );
+
+  const focusedLessonIds = useMemo(() => {
+    if (!focusedTravelKey) return null;
+    const [a, b] = focusedTravelKey.split("|");
+    return new Set([a, b]);
+  }, [focusedTravelKey]);
 
   return (
-    <div className="flex-1 overflow-auto" role="region" aria-label="Week schedule">
+    <div
+      ref={scrollerRef}
+      className="flex-1 overflow-auto"
+      role="region"
+      aria-label="Week schedule"
+    >
       <div className="min-w-[840px]">
         {/* Day header */}
         <div
@@ -126,27 +263,74 @@ export function WeekTimeline({
           style={{ gridTemplateColumns: `${GUTTER_PX}px repeat(7, minmax(0, 1fr))` }}
         >
           {/* Hour gutter */}
-          <div className="relative" style={{ height: totalPx }}>
-            {hours.map((m) => (
-              <span
-                key={m}
-                className="cf-mono absolute right-1.5 -translate-y-1/2 text-[10px] text-ink-faint"
-                style={{ top: (m - topMin) * PX_PER_MIN }}
+          <div className="relative" style={{ height: scale.totalPx }}>
+            {hours.map((m) => {
+              // Hide labels inside or on the edge of a collapsed band — the band carries the range.
+              const inCollapsed = collapsedGaps.some(
+                (g) => m >= g.startMin && m <= g.endMin
+              );
+              if (inCollapsed) return null;
+              return (
+                <span
+                  key={m}
+                  className="cf-mono absolute right-1.5 -translate-y-1/2 text-[10px] text-ink-faint"
+                  style={{ top: scale.minuteToY(m) }}
+                >
+                  {formatMin(m)}
+                </span>
+              );
+            })}
+            {collapsedGaps.map((g) => {
+              const tucked = allLessons.filter((l) =>
+                midInCollapsedGap(l.startMin, l.endMin, [g])
+              ).length;
+              return (
+                <button
+                  key={g.id}
+                  type="button"
+                  onClick={() => toggleGap(g.id)}
+                  title={`Expand ${formatMin(g.startMin)}–${formatMin(g.endMin)}`}
+                  className="cf-mono absolute right-0 left-0 z-10 flex items-center justify-end gap-1 pr-1 text-[9px] font-semibold text-ink-mute hover:text-accent"
+                  style={{
+                    top: scale.minuteToY(g.startMin),
+                    height: scale.rangeHeight(g.startMin, g.endMin),
+                  }}
+                >
+                  <span>
+                    {formatMin(g.startMin)}–{formatMin(g.endMin)}
+                  </span>
+                  {tucked > 0 && <span className="text-ink-faint">·{tucked}</span>}
+                </button>
+              );
+            })}
+            {expandedGapSegs.map((g) => (
+              <button
+                key={`collapse-${g.id}`}
+                type="button"
+                onClick={() => toggleGap(g.id)}
+                title={`Collapse ${formatMin(g.startMin)}–${formatMin(g.endMin)}`}
+                className="cf-mono absolute right-1 z-10 -translate-y-1/2 rounded-sm border border-line-soft bg-surface px-1 text-[9px] font-semibold text-ink-faint hover:border-ink-faint hover:text-ink-mute"
+                style={{ top: scale.minuteToY(g.startMin) }}
               >
-                {formatMin(m)}
-              </span>
+                fold
+              </button>
             ))}
           </div>
 
           {days.map((date) => {
-            const laid = byDay.get(date) ?? [];
+            const dayLayout = byDay.get(date) ?? { visible: [], overflow: [] };
             const isToday = date === today;
             const dayDrag = drag?.date === date ? drag : null;
+            const dayTravel = travelConflicts.filter((c) => {
+              const prev = lessonsById.get(c.lessonIds[0]);
+              return prev?.date === date;
+            });
+
             return (
               <div
                 key={date}
-                className={`relative border-l border-line-soft ${isToday ? "bg-accent-soft/30" : ""}`}
-                style={{ height: totalPx, touchAction: onCreateRange ? "pan-x" : undefined }}
+                className={`relative overflow-x-clip border-l border-line-soft ${isToday ? "bg-accent-soft/30" : ""}`}
+                style={{ height: scale.totalPx, touchAction: onCreateRange ? "pan-x" : undefined }}
                 onPointerDown={
                   onCreateRange
                     ? (e) => {
@@ -172,7 +356,7 @@ export function WeekTimeline({
                         if (!dayDrag) return;
                         const start = Math.min(dayDrag.anchorMin, dayDrag.currentMin);
                         let end = Math.max(dayDrag.anchorMin, dayDrag.currentMin);
-                        if (end - start < 15) end = start + 60; // a click means "start here, one hour"
+                        if (end - start < 15) end = start + 60;
                         setDrag(null);
                         onCreateRange(date, start, end);
                       }
@@ -180,23 +364,43 @@ export function WeekTimeline({
                 }
                 onPointerCancel={onCreateRange ? () => setDrag(null) : undefined}
               >
-                {/* Hour lines */}
-                {hours.map((m) => (
-                  <div
-                    key={m}
-                    className="pointer-events-none absolute inset-x-0 border-t border-line-soft"
-                    style={{ top: (m - topMin) * PX_PER_MIN }}
+                {hours.map((m) => {
+                  const inCollapsed = collapsedGaps.some(
+                    (g) => m >= g.startMin && m <= g.endMin
+                  );
+                  if (inCollapsed) return null;
+                  return (
+                    <div
+                      key={m}
+                      className="pointer-events-none absolute inset-x-0 border-t border-line-soft"
+                      style={{ top: scale.minuteToY(m) }}
+                    />
+                  );
+                })}
+
+                {collapsedGaps.map((g) => (
+                  <button
+                    key={g.id}
+                    type="button"
+                    onClick={() => toggleGap(g.id)}
+                    aria-label={`Expand empty range ${formatMin(g.startMin)} to ${formatMin(g.endMin)}`}
+                    className="absolute inset-x-0 z-[5] border-y border-dashed border-line-soft bg-[repeating-linear-gradient(-45deg,transparent,transparent_3px,var(--line-soft)_3px,var(--line-soft)_6px)] hover:bg-[repeating-linear-gradient(-45deg,transparent,transparent_3px,var(--line)_3px,var(--line)_6px)]"
+                    style={{
+                      top: scale.minuteToY(g.startMin),
+                      height: scale.rangeHeight(g.startMin, g.endMin),
+                    }}
                   />
                 ))}
 
-                {/* Drag-to-create ghost */}
                 {dayDrag && dayDrag.currentMin !== dayDrag.anchorMin && (
                   <div
                     className="pointer-events-none absolute inset-x-0.5 z-10 rounded-sm border border-accent bg-accent-soft/70"
                     style={{
-                      top: (Math.min(dayDrag.anchorMin, dayDrag.currentMin) - topMin) * PX_PER_MIN,
-                      height:
-                        Math.abs(dayDrag.currentMin - dayDrag.anchorMin) * PX_PER_MIN,
+                      top: scale.minuteToY(Math.min(dayDrag.anchorMin, dayDrag.currentMin)),
+                      height: scale.rangeHeight(
+                        Math.min(dayDrag.anchorMin, dayDrag.currentMin),
+                        Math.max(dayDrag.anchorMin, dayDrag.currentMin)
+                      ),
                     }}
                   >
                     <span className="cf-mono px-1 text-[10px] font-semibold text-accent">
@@ -206,32 +410,89 @@ export function WeekTimeline({
                   </div>
                 )}
 
-                {/* Now marker */}
-                {isToday && nowMin !== null && nowMin >= topMin && nowMin <= bottomMin && (
-                  <div
-                    className="pointer-events-none absolute inset-x-0 z-10"
-                    style={{ top: (nowMin - topMin) * PX_PER_MIN }}
-                  >
-                    <div className="border-t-2 border-accent" />
-                    <span className="cf-mono absolute -top-2 left-0.5 rounded-sm bg-accent px-1 text-[9px] font-bold text-accent-ink">
-                      {formatMin(nowMin)}
-                    </span>
-                  </div>
-                )}
+                {isToday &&
+                  nowMin !== null &&
+                  nowMin >= topMin &&
+                  nowMin <= bottomMin &&
+                  !collapsedGaps.some((g) => nowMin > g.startMin && nowMin < g.endMin) && (
+                    <div
+                      className="pointer-events-none absolute inset-x-0 z-10"
+                      style={{ top: scale.minuteToY(nowMin) }}
+                    >
+                      <div className="border-t-2 border-accent" />
+                      <span className="cf-mono absolute -top-2 left-0.5 rounded-sm bg-accent px-1 text-[9px] font-bold text-accent-ink">
+                        {formatMin(nowMin)}
+                      </span>
+                    </div>
+                  )}
 
-                {laid.map(({ lesson, lane, laneCount }) => (
-                  <LessonBlock
-                    key={lesson.id}
-                    lesson={lesson}
-                    lane={lane}
-                    laneCount={laneCount}
-                    topMin={topMin}
-                    conflicts={conflictsByLesson.get(lesson.id) ?? []}
-                    lookups={lookups}
-                    selected={selectedLessonId === lesson.id}
-                    onSelect={onSelectLesson}
-                  />
-                ))}
+                {dayLayout.visible.map(({ lesson, lane, laneCount, hasOverflow }) => {
+                  if (midInCollapsedGap(lesson.startMin, lesson.endMin, collapsedGaps)) {
+                    return null;
+                  }
+                  return (
+                    <LessonBlock
+                      key={`${lesson.id}-${
+                        focusedLessonIds?.has(lesson.id) ? travelFocusNonce : 0
+                      }`}
+                      lesson={lesson}
+                      lane={lane}
+                      laneCount={laneCount}
+                      hasOverflow={hasOverflow}
+                      minuteToY={scale.minuteToY}
+                      rangeHeight={scale.rangeHeight}
+                      conflicts={conflictsByLesson.get(lesson.id) ?? []}
+                      lookups={lookups}
+                      selected={selectedLessonId === lesson.id}
+                      travelHighlighted={focusedLessonIds?.has(lesson.id) ?? false}
+                      onSelect={onSelectLesson}
+                    />
+                  );
+                })}
+
+                {dayLayout.overflow.map((group) => {
+                  if (midInCollapsedGap(group.startMin, group.endMin, collapsedGaps)) {
+                    return null;
+                  }
+                  return (
+                    <OverflowChip
+                      key={group.id}
+                      group={group}
+                      minuteToY={scale.minuteToY}
+                      rangeHeight={scale.rangeHeight}
+                      lookups={lookups}
+                      onSelect={onSelectLesson}
+                    />
+                  );
+                })}
+
+                {dayTravel.map((c) => {
+                  const prev = lessonsById.get(c.lessonIds[0]);
+                  const next = lessonsById.get(c.lessonIds[1]);
+                  if (!prev || !next) return null;
+                  if (midInCollapsedGap(prev.endMin, next.startMin, collapsedGaps)) {
+                    return null;
+                  }
+                  const fromCampus = lookups.campusOfRoom(prev.roomId);
+                  const toCampus = lookups.campusOfRoom(next.roomId);
+                  const teacher = lookups.teachersById.get(c.teacherId);
+                  const key = travelGapKey(c);
+                  return (
+                    <TravelGapChip
+                      key={`${key}-${focusedTravelKey === key ? travelFocusNonce : 0}`}
+                      gapKey={key}
+                      gapMin={c.gapMin}
+                      gapStartMin={prev.endMin}
+                      gapEndMin={next.startMin}
+                      minuteToY={scale.minuteToY}
+                      fromCampus={campusShort(fromCampus?.name)}
+                      toCampus={campusShort(toCampus?.name)}
+                      teacherCode={teacher?.code ?? "?"}
+                      highlighted={focusedTravelKey === key}
+                      onActivate={() => onFocusTravelGap?.(key)}
+                    />
+                  );
+                })}
               </div>
             );
           })}
