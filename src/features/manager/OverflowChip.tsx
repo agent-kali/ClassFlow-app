@@ -6,8 +6,17 @@ import type { Lesson } from "@/domain/types";
 import type { useLookups } from "@/data/hooks";
 import { formatRange } from "@/domain/time";
 import { Badge, schoolClass } from "@/components/Badge";
-import type { OverflowGroup } from "./laneLayout";
-import { OVERFLOW_STRIP_PX } from "./laneLayout";
+import { LANE_EDGE_PX } from "./laneLayout";
+
+/** @deprecated Overflow lanes are rendered inline; chip kept for reference. */
+const OVERFLOW_STRIP_PX = 20;
+
+export interface OverflowGroup {
+  id: string;
+  lessons: Lesson[];
+  startMin: number;
+  endMin: number;
+}
 
 interface Props {
   group: OverflowGroup;
@@ -33,7 +42,7 @@ export function OverflowChip({ group, minuteToY, rangeHeight, lookups, onSelect 
           style={{
             top,
             height,
-            right: 1,
+            right: LANE_EDGE_PX,
             width: OVERFLOW_STRIP_PX - 2,
           }}
           aria-label={`${n} more overlapping lesson${n > 1 ? "s" : ""}`}

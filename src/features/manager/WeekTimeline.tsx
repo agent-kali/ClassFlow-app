@@ -8,7 +8,6 @@ import type { useLookups } from "@/data/hooks";
 import { formatMin, nowMinOn, weekDates } from "@/domain/time";
 import { layoutDay } from "./laneLayout";
 import { LessonBlock } from "./LessonBlock";
-import { OverflowChip } from "./OverflowChip";
 import { TravelGapChip } from "./TravelGapChip";
 import {
   AXIS_PADDING_PX,
@@ -239,7 +238,7 @@ export function WeekTimeline({
           </div>
 
           {days.map((date) => {
-            const dayLayout = byDay.get(date) ?? { visible: [], overflow: [] };
+            const dayLayout = byDay.get(date) ?? [];
             const isToday = date === today;
             const dayDrag = drag?.date === date ? drag : null;
             const dayTravel = travelConflicts.filter((c) => {
@@ -338,7 +337,7 @@ export function WeekTimeline({
                     </div>
                   )}
 
-                {dayLayout.visible.map(({ lesson, lane, laneCount, hasOverflow }) => (
+                {dayLayout.map(({ lesson, lane, laneCount }) => (
                   <LessonBlock
                     key={`${lesson.id}-${
                       focusedLessonIds?.has(lesson.id) ? travelFocusNonce : 0
@@ -346,24 +345,12 @@ export function WeekTimeline({
                     lesson={lesson}
                     lane={lane}
                     laneCount={laneCount}
-                    hasOverflow={hasOverflow}
                     minuteToY={scale.minuteToY}
                     rangeHeight={scale.rangeHeight}
                     conflicts={conflictsByLesson.get(lesson.id) ?? []}
                     lookups={lookups}
                     selected={selectedLessonId === lesson.id}
                     travelHighlighted={focusedLessonIds?.has(lesson.id) ?? false}
-                    onSelect={onSelectLesson}
-                  />
-                ))}
-
-                {dayLayout.overflow.map((group) => (
-                  <OverflowChip
-                    key={group.id}
-                    group={group}
-                    minuteToY={scale.minuteToY}
-                    rangeHeight={scale.rangeHeight}
-                    lookups={lookups}
                     onSelect={onSelectLesson}
                   />
                 ))}

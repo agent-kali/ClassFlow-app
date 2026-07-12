@@ -131,11 +131,93 @@ body {
 /*
  * Adaptive lesson card — size buckets via container queries.
  * Tiers drop whole fields bottom-up; never mid-token ellipsis on time/codes/badges.
+ * Full-width (laneCount = 1):
  *   micro  (default / very short): T1 only — color spine + code + start, stacked
- *   narrow (≥36×32):  + T2 teacher  (covers 1/3-column lanes)
+ *   narrow (≥36×32):  + T2 teacher
  *   medium (≥88×46):  + T3 room (+CM when wide enough)
  *   full   (≥118×60): + T4 curriculum
+ * Multi-lane clusters stay compact (code + start) until ≥84px, then detail
+ * tiers unlock gradually. Hover title always carries the full tooltip.
  */
+/* Multi-lane clusters: compact until the lane clears COMPACT_LANE_WIDTH_PX (84). */
+.cf-lesson--lanes .cf-lesson__t2,
+.cf-lesson--lanes .cf-lesson__t3,
+.cf-lesson--lanes .cf-lesson__t4,
+.cf-lesson--lanes .cf-lesson__flag {
+  display: none;
+}
+
+.cf-lesson--lanes .cf-lesson__body {
+  padding: 2px 3px;
+  gap: 1px;
+}
+
+.cf-lesson--lanes .cf-lesson__t1 {
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.cf-lesson--lanes .cf-lesson__code {
+  font-size: 9px;
+}
+
+.cf-lesson--lanes .cf-lesson__time {
+  font-size: 8px;
+}
+
+/* Side-by-side T1 once code + start fit on one row. */
+@container lesson (min-width: 72px) {
+  .cf-lesson--lanes .cf-lesson__t1 {
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: baseline;
+    gap: 5px;
+  }
+
+  .cf-lesson--lanes .cf-lesson__code {
+    font-size: 11px;
+  }
+
+  .cf-lesson--lanes .cf-lesson__time {
+    font-size: 10px;
+  }
+
+  .cf-lesson--lanes .cf-lesson__flag {
+    display: inline-flex;
+  }
+
+  .cf-lesson--lanes .cf-lesson__body {
+    padding: 3px 5px;
+    gap: 2px;
+  }
+}
+
+/* Teacher only when the short code fits under the title row. */
+@container lesson (min-width: 84px) and (min-height: 36px) {
+  .cf-lesson--lanes .cf-lesson__t2 {
+    display: block;
+  }
+}
+
+/* Room / CM / curriculum need real width — prefer tooltip over mid-token clip. */
+@container lesson (min-width: 120px) and (min-height: 48px) {
+  .cf-lesson--lanes .cf-lesson__t3 {
+    display: flex;
+  }
+}
+
+@container lesson (min-width: 140px) {
+  .cf-lesson--lanes .cf-lesson__cm {
+    display: inline;
+  }
+}
+
+@container lesson (min-width: 150px) and (min-height: 60px) {
+  .cf-lesson--lanes .cf-lesson__t4 {
+    display: block;
+  }
+}
+
 .cf-lesson {
   container-type: size;
   container-name: lesson;

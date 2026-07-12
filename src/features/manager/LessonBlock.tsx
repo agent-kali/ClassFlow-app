@@ -6,11 +6,7 @@ import type { Conflict } from "@/domain/conflicts";
 import { useLookups } from "@/data/hooks";
 import { formatMin, formatRange } from "@/domain/time";
 import { Badge, schoolClass } from "@/components/Badge";
-import {
-  LANE_EDGE_PX,
-  LANE_GUTTER_PX,
-  OVERFLOW_STRIP_PX,
-} from "./laneLayout";
+import { LANE_EDGE_PX } from "./laneLayout";
 
 /** Single source of truth for vertical time scale (gutter, gridlines, events). */
 export const PX_PER_MIN = 1.5;
@@ -19,8 +15,6 @@ interface Props {
   lesson: Lesson;
   lane: number;
   laneCount: number;
-  /** Cluster has collapsed overflow — reserve a right strip for "+N". */
-  hasOverflow?: boolean;
   /** Map a minute-of-day to Y within the day column. */
   minuteToY: (min: number) => number;
   /** Pixel height of a [start, end) minute range on the scale. */
@@ -33,20 +27,18 @@ interface Props {
   onSelect?: (lesson: Lesson, el: HTMLElement) => void;
 }
 
-/** Horizontal geometry for a lane inside a day column. Always stays in-bounds. */
-export function laneStyle(
-  lane: number,
-  laneCount: number,
-  hasOverflow = false
-): { left: string; width: string } {
-  const rightReserve = hasOverflow ? OVERFLOW_STRIP_PX : 0;
-  const gaps = (laneCount - 1) * LANE_GUTTER_PX;
-  const inset = 2 * LANE_EDGE_PX + rightReserve + gaps;
-  const width = `calc((100% - ${inset}px) / ${laneCount})`;
-  const left =
-    lane === 0
-      ? `${LANE_EDGE_PX}px`
-      : `calc(${LANE_EDGE_PX}px + ${lane} * ((100% - ${inset}px) / ${laneCount} + ${LANE_GUTTER_PX}px))`;
+/**
+ * Equal-width lanes packed flush inside a day column.
+ * card_width = (column − edge insets) / laneCount; x = lane × card_width.
+ */
+export function laneStyle(lane: number, laneCount: number): { left: string; width: string } {
+  const edge = LANE_EDGE_PX;
+  if (laneCount <= 1) {
+    return { left: `${edge}px`, width: `calc(100% - ${2 * edge}px)` };
+  }
+  const usable = `100% - ${2 * edge}px`;
+  const width = `calc((${usable}) / ${laneCount})`;
+  const left = `calc(${edge}px + ${lane} * (${usable}) / ${laneCount})`;
   return { left, width };
 }
 
@@ -79,7 +71,6 @@ export const LessonBlock = forwardRef<HTMLButtonElement, Props>(function LessonB
     lesson,
     lane,
     laneCount,
-    hasOverflow = false,
     minuteToY,
     rangeHeight,
     conflicts,
@@ -97,7 +88,8 @@ export const LessonBlock = forwardRef<HTMLButtonElement, Props>(function LessonB
 
   const top = minuteToY(lesson.startMin);
   const height = rangeHeight(lesson.startMin, lesson.endMin);
-  const { left, width } = laneStyle(lane, laneCount, hasOverflow);
+  const { left, width } = laneStyle(lane, laneCount);
+  const multiLane = laneCount > 1;
 
   const isOff = lesson.status !== "scheduled";
   const hasOverlap = conflicts.some((c) => c.type === "overlap");
@@ -126,8 +118,9 @@ export const LessonBlock = forwardRef<HTMLButtonElement, Props>(function LessonB
       data-conflict={hasOverlap || undefined}
       data-cancelled={isOff || undefined}
       className={`cf-lesson cf-card ${schoolClass(school)} group absolute overflow-hidden rounded-sm text-left ${
-        travelHighlighted ? "cf-travel-pulse z-10 ring-2 ring-warn" : ""
-      }`}
+        multiLane ? "cf-lesson--lanes" : ""
+      } ${travelHighlighted ? "cf-travel-pulse z-10 ring-2 ring-warn" : ""}`}
+      data-lane-count={laneCount}
       style={{
         top,
         height: Math.max(height, 18),
