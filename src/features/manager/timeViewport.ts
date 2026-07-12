@@ -1,12 +1,16 @@
 import { PX_PER_MIN } from "./LessonBlock";
 
-/** Collapse ranges longer than this with no (or only sparse) coverage. */
-export const EMPTY_GAP_THRESHOLD_MIN = 2 * 60;
+/** Single source of truth: every hour is exactly this tall on the axis. */
+export const HOUR_HEIGHT_PX = 60 * PX_PER_MIN;
 
-/** Slim band height for a collapsed empty/sparse range. */
-export const COLLAPSED_BAND_PX = 36;
+/** Breathing room above the first hour and below the last so labels clear the sticky header. */
+export const AXIS_PADDING_PX = 28;
+
+/** Minimum empty span (no lessons on any visible day) before we de-emphasize it. */
+export const EMPTY_SPAN_THRESHOLD_MIN = 2 * 60;
 
 const BUCKET_MIN = 5;
+const CLUSTER_GAP_MIN = 90;
 
 export interface TimeRange {
   startMin: number;
@@ -18,16 +22,11 @@ export interface LessonCoverage extends TimeRange {
   dayIndex: number;
 }
 
-export type TimeSegment =
-  | { kind: "span"; startMin: number; endMin: number }
-  | { kind: "gap"; id: string; startMin: number; endMin: number; collapsed: boolean };
-
 export interface TimeScale {
   topMin: number;
   bottomMin: number;
   totalPx: number;
-  segments: TimeSegment[];
-  /** Y offset of a minute within the scaled viewport. */
+  /** Y offset of a minute within the linear viewport. */
   minuteToY: (min: number) => number;
   /** Inverse: pointer Y → minute (clamped to axis). */
   yToMinute: (y: number) => number;
@@ -35,8 +34,26 @@ export interface TimeScale {
   rangeHeight: (startMin: number, endMin: number) => number;
 }
 
-function gapId(startMin: number, endMin: number): string {
-  return `${startMin}-${endMin}`;
+/** Linear scale: one px/min everywhere; gutter, gridlines, and events share it. */
+export function createTimeScale(topMin: number, bottomMin: number): TimeScale {
+  const spanPx = (bottomMin - topMin) * PX_PER_MIN;
+  const totalPx = spanPx + 2 * AXIS_PADDING_PX;
+
+  const minuteToY = (min: number): number => {
+    const clamped = Math.max(topMin, Math.min(bottomMin, min));
+    return AXIS_PADDING_PX + (clamped - topMin) * PX_PER_MIN;
+  };
+
+  const yToMinute = (y: number): number => {
+    const clampedY = Math.max(0, Math.min(totalPx, y));
+    const raw = topMin + (clampedY - AXIS_PADDING_PX) / PX_PER_MIN;
+    return Math.max(topMin, Math.min(bottomMin, raw));
+  };
+
+  const rangeHeight = (startMin: number, endMin: number): number =>
+    Math.max(0, (endMin - startMin) * PX_PER_MIN);
+
+  return { topMin, bottomMin, totalPx, minuteToY, yToMinute, rangeHeight };
 }
 
 /**
@@ -85,22 +102,19 @@ function mergeRanges(ranges: TimeRange[]): TimeRange[] {
 }
 
 /**
- * Find compressible ranges: empty stretches (> threshold with zero lessons on
- * every visible day), expanded through abutting low-density runs (covered on
- * fewer than half the visible days) so a weekend-only blip doesn't keep a
- * weekday midday gap fully open.
+ * Empty spans with no lesson on any visible day — used for de-emphasis only,
+ * never to compress the axis.
  */
-export function findCompressibleGaps(
+export function findEmptySpans(
   topMin: number,
   bottomMin: number,
   lessons: LessonCoverage[],
   dayCount: number,
-  thresholdMin: number = EMPTY_GAP_THRESHOLD_MIN
+  thresholdMin: number = EMPTY_SPAN_THRESHOLD_MIN
 ): TimeRange[] {
   const coverage = buildCoverage(topMin, bottomMin, lessons, dayCount);
   if (coverage.length === 0) return [];
 
-  // Sparse = covered on fewer than half the days (weekends-only midday, etc.).
   const sparseMax = Math.max(1, Math.floor(dayCount / 2) - 1);
 
   const empty: TimeRange[] = [];
@@ -118,7 +132,7 @@ export function findCompressibleGaps(
     }
   }
 
-  const gaps: TimeRange[] = [];
+  const spans: TimeRange[] = [];
   for (const gap of empty) {
     let start = gap.startMin;
     let end = gap.endMin;
@@ -137,126 +151,67 @@ export function findCompressibleGaps(
     }
 
     if (end - start >= thresholdMin) {
-      gaps.push({ startMin: start, endMin: end });
+      spans.push({ startMin: start, endMin: end });
     }
   }
 
-  return mergeRanges(gaps);
+  return mergeRanges(spans);
 }
 
-/** Build ordered span/gap segments for the axis. */
-export function buildSegments(
-  topMin: number,
-  bottomMin: number,
-  gaps: TimeRange[],
-  expandedIds: ReadonlySet<string>
-): TimeSegment[] {
-  const segments: TimeSegment[] = [];
-  let cursor = topMin;
+interface Cluster {
+  startMin: number;
+  endMin: number;
+  count: number;
+}
 
-  for (const gap of gaps) {
-    if (gap.startMin > cursor) {
-      segments.push({ kind: "span", startMin: cursor, endMin: gap.startMin });
+function lessonClusters(lessons: TimeRange[], gapThresholdMin = CLUSTER_GAP_MIN): Cluster[] {
+  if (lessons.length === 0) return [];
+  const sorted = [...lessons].sort((a, b) => a.startMin - b.startMin);
+  const clusters: Cluster[] = [
+    { startMin: sorted[0].startMin, endMin: sorted[0].endMin, count: 1 },
+  ];
+
+  for (let i = 1; i < sorted.length; i++) {
+    const lesson = sorted[i];
+    const cur = clusters[clusters.length - 1];
+    if (lesson.startMin - cur.endMin > gapThresholdMin) {
+      clusters.push({ startMin: lesson.startMin, endMin: lesson.endMin, count: 1 });
+    } else {
+      cur.endMin = Math.max(cur.endMin, lesson.endMin);
+      cur.count += 1;
     }
-    const id = gapId(gap.startMin, gap.endMin);
-    segments.push({
-      kind: "gap",
-      id,
-      startMin: gap.startMin,
-      endMin: gap.endMin,
-      collapsed: !expandedIds.has(id),
-    });
-    cursor = gap.endMin;
   }
 
-  if (cursor < bottomMin) {
-    segments.push({ kind: "span", startMin: cursor, endMin: bottomMin });
-  }
-
-  return segments;
-}
-
-function segmentHeight(seg: TimeSegment): number {
-  if (seg.kind === "gap" && seg.collapsed) return COLLAPSED_BAND_PX;
-  return (seg.endMin - seg.startMin) * PX_PER_MIN;
-}
-
-/** Piecewise linear scale: full px/min in spans, slim band for collapsed gaps. */
-export function createTimeScale(
-  topMin: number,
-  bottomMin: number,
-  gaps: TimeRange[],
-  expandedIds: ReadonlySet<string>
-): TimeScale {
-  const segments = buildSegments(topMin, bottomMin, gaps, expandedIds);
-  const totalPx = segments.reduce((sum, seg) => sum + segmentHeight(seg), 0);
-
-  const minuteToY = (min: number): number => {
-    const clamped = Math.max(topMin, Math.min(bottomMin, min));
-    let y = 0;
-    for (const seg of segments) {
-      if (clamped <= seg.startMin) return y;
-      if (clamped >= seg.endMin) {
-        y += segmentHeight(seg);
-        continue;
-      }
-      const frac = (clamped - seg.startMin) / (seg.endMin - seg.startMin || 1);
-      return y + frac * segmentHeight(seg);
-    }
-    return y;
-  };
-
-  const yToMinute = (y: number): number => {
-    const clampedY = Math.max(0, Math.min(totalPx, y));
-    let cursor = 0;
-    for (let i = 0; i < segments.length; i++) {
-      const seg = segments[i];
-      const h = segmentHeight(seg);
-      const isLast = i === segments.length - 1;
-      if (clampedY <= cursor + h || isLast) {
-        const frac = h === 0 ? 0 : Math.min(1, Math.max(0, (clampedY - cursor) / h));
-        return seg.startMin + frac * (seg.endMin - seg.startMin);
-      }
-      cursor += h;
-    }
-    return bottomMin;
-  };
-
-  const rangeHeight = (startMin: number, endMin: number): number =>
-    Math.max(0, minuteToY(endMin) - minuteToY(startMin));
-
-  return { topMin, bottomMin, totalPx, segments, minuteToY, yToMinute, rangeHeight };
+  return clusters;
 }
 
 /**
- * Default scroll anchor in absolute minutes: "now" when it falls inside an
- * active teaching span (not a compressible empty/sparse gap), otherwise the
- * week's earliest lesson start.
+ * Default scroll anchor: "now" when it sits near an active lesson, otherwise
+ * the center of the busiest lesson cluster (evening when midday is empty).
  */
 export function defaultAnchorMin(
   lessons: TimeRange[],
   topMin: number,
   bottomMin: number,
-  nowMin: number | null,
-  gaps: TimeRange[] = []
+  nowMin: number | null
 ): number {
-  const inGap = (min: number) =>
-    gaps.some((g) => min > g.startMin && min < g.endMin);
-
+  const NEAR_MIN = 45;
   if (
     nowMin !== null &&
     nowMin >= topMin &&
     nowMin <= bottomMin &&
-    !inGap(nowMin)
+    lessons.some((l) => nowMin >= l.startMin - NEAR_MIN && nowMin <= l.endMin + NEAR_MIN)
   ) {
     return nowMin;
   }
-  let first = Infinity;
-  for (const l of lessons) {
-    if (l.startMin < first) first = l.startMin;
-  }
-  if (Number.isFinite(first)) return first;
-  return topMin;
+
+  const clusters = lessonClusters(lessons);
+  if (clusters.length === 0) return (topMin + bottomMin) / 2;
+
+  const best = clusters.reduce((a, b) =>
+    b.count > a.count || (b.count === a.count && b.startMin > a.startMin) ? b : a
+  );
+  return (best.startMin + best.endMin) / 2;
 }
 
 export function tagLessonsWithDayIndex<T extends TimeRange & { date: string }>(

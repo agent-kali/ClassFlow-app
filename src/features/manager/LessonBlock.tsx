@@ -12,7 +12,7 @@ import {
   OVERFLOW_STRIP_PX,
 } from "./laneLayout";
 
-/** Fallback px/min when a caller isn't on the compressed time scale. */
+/** Single source of truth for vertical time scale (gutter, gridlines, events). */
 export const PX_PER_MIN = 1.5;
 
 interface Props {
