@@ -35,10 +35,16 @@ export function layoutDay(lessons: Lesson[]): LaidOutLesson[] {
   let laneEnds: number[] = [];
   let clusterEnd = -1;
 
+  // #region agent log
   const flush = () => {
     if (cluster.length === 0) return;
 
     const laneCount = Math.max(1, laneEnds.length);
+    if (laneCount > 1) {
+      fetch('http://127.0.0.1:7900/ingest/9cc422f0-d1c4-451e-8dd5-56e6e56cfb46',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'cd3cd2'},body:JSON.stringify({sessionId:'cd3cd2',runId:'pre-fix',hypothesisId:'H2',location:'laneLayout.ts:flush',message:'multi-lane cluster',data:{laneCount,lessons:cluster.map((c)=>({id:c.lesson.id,lane:c.lane,start:c.lesson.startMin,end:c.lesson.endMin}))},timestamp:Date.now()})}).catch(()=>{});
+    }
+    // #endregion
+
     for (const item of cluster) {
       results.push({
         lesson: item.lesson,
