@@ -1,6 +1,6 @@
 "use client";
 
-import { forwardRef } from "react";
+import { forwardRef, useLayoutEffect, useRef, useState } from "react";
 import type { Lesson } from "@/domain/types";
 import type { Conflict } from "@/domain/conflicts";
 import { useLookups } from "@/data/hooks";
@@ -90,6 +90,20 @@ export const LessonBlock = forwardRef<HTMLButtonElement, Props>(function LessonB
   const height = rangeHeight(lesson.startMin, lesson.endMin);
   const { left, width } = laneStyle(lane, laneCount);
   const multiLane = laneCount > 1;
+  const localRef = useRef<HTMLButtonElement | null>(null);
+  const [domLaneLabel, setDomLaneLabel] = useState("…");
+
+  // TEMP DEBUG — read layout from the live DOM node, then revert.
+  useLayoutEffect(() => {
+    const el = localRef.current;
+    if (!el) return;
+    const cs = getComputedStyle(el);
+    const laneAttr = el.getAttribute("data-lane") ?? "?";
+    const countAttr = el.getAttribute("data-lane-count") ?? "?";
+    setDomLaneLabel(
+      `${laneAttr}/${countAttr} L:${cs.left} W:${cs.width}`
+    );
+  }, [lane, laneCount, left, width, top]);
 
   const isOff = lesson.status !== "scheduled";
   const hasOverlap = conflicts.some((c) => c.type === "overlap");
@@ -109,11 +123,16 @@ export const LessonBlock = forwardRef<HTMLButtonElement, Props>(function LessonB
 
   return (
     <button
-      ref={ref}
+      ref={(node) => {
+        localRef.current = node;
+        if (typeof ref === "function") ref(node);
+        else if (ref) ref.current = node;
+      }}
       type="button"
       title={title}
       onClick={(e) => onSelect?.(lesson, e.currentTarget)}
       data-lesson-id={lesson.id}
+      data-lane={lane}
       data-selected={selected || undefined}
       data-conflict={hasOverlap || undefined}
       data-cancelled={isOff || undefined}
@@ -133,6 +152,13 @@ export const LessonBlock = forwardRef<HTMLButtonElement, Props>(function LessonB
       }}
       aria-label={`${group?.code ?? "Lesson"} ${rangeLabel}${isOff ? `, ${lesson.status}` : ""}`}
     >
+      {/* TEMP DEBUG OVERLAY — DOM-sourced lane geometry */}
+      <span
+        aria-hidden
+        className="pointer-events-none absolute top-0 right-0 z-50 max-w-full truncate bg-black/80 px-0.5 font-mono text-[8px] leading-tight text-lime-300"
+      >
+        {domLaneLabel}
+      </span>
       <div className="cf-lesson__body">
         {/* T1 — always: course code + start time (complete tokens only) */}
         <div className="cf-lesson__t1">
