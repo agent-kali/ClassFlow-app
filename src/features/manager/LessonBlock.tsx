@@ -1,6 +1,6 @@
 "use client";
 
-import { forwardRef, useLayoutEffect, useRef } from "react";
+import { forwardRef } from "react";
 import type { Lesson } from "@/domain/types";
 import type { Conflict } from "@/domain/conflicts";
 import { useLookups } from "@/data/hooks";
@@ -90,38 +90,6 @@ export const LessonBlock = forwardRef<HTMLButtonElement, Props>(function LessonB
   const height = rangeHeight(lesson.startMin, lesson.endMin);
   const { left, width } = laneStyle(lane, laneCount);
   const multiLane = laneCount > 1;
-  const measureRef = useRef<HTMLButtonElement | null>(null);
-
-  // #region agent log
-  useLayoutEffect(() => {
-    const el = measureRef.current;
-    if (!el || laneCount <= 1) return;
-    const rect = el.getBoundingClientRect();
-    const cs = getComputedStyle(el);
-    const parent = el.parentElement;
-    const parentW = parent?.getBoundingClientRect().width ?? 0;
-    const siblings = parent
-      ? [...parent.querySelectorAll<HTMLElement>("[data-lane-count]")].filter(
-          (n) => n.getAttribute("data-lane-count") === String(laneCount)
-        )
-      : [];
-    const overlapPx = siblings
-      .filter((n) => n !== el)
-      .map((n) => {
-        const r = n.getBoundingClientRect();
-        const xOverlap = Math.min(rect.right, r.right) - Math.max(rect.left, r.left);
-        return xOverlap > 0.5 ? xOverlap : 0;
-      })
-      .reduce((a, b) => Math.max(a, b), 0);
-  fetch('http://127.0.0.1:7900/ingest/9cc422f0-d1c4-451e-8dd5-56e6e56cfb46',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'cd3cd2'},body:JSON.stringify({sessionId:'cd3cd2',runId:'pre-fix',hypothesisId:'H1',location:'LessonBlock.tsx:useLayoutEffect',message:'multi-lane geometry',data:{lessonId:lesson.id,lane,laneCount,styleLeft:left,styleWidth:width,computedLeft:cs.left,computedWidth:cs.width,rectW:rect.width,rectLeft:rect.left,parentW,overlapPx,siblingCount:siblings.length},timestamp:Date.now()})}).catch(()=>{});
-    if (!group?.code || !teacher?.code || !room?.name) {
-      fetch('http://127.0.0.1:7900/ingest/9cc422f0-d1c4-451e-8dd5-56e6e56cfb46',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'cd3cd2'},body:JSON.stringify({sessionId:'cd3cd2',runId:'pre-fix',hypothesisId:'H4',location:'LessonBlock.tsx:useLayoutEffect',message:'missing lookup data',data:{lessonId:lesson.id,hasGroup:!!group?.code,hasTeacher:!!teacher?.code,hasRoom:!!room?.name},timestamp:Date.now()})}).catch(()=>{});
-    }
-    if (rect.width > 0 && rect.width < 84 && laneCount > 1) {
-      fetch('http://127.0.0.1:7900/ingest/9cc422f0-d1c4-451e-8dd5-56e6e56cfb46',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'cd3cd2'},body:JSON.stringify({sessionId:'cd3cd2',runId:'pre-fix',hypothesisId:'H3',location:'LessonBlock.tsx:useLayoutEffect',message:'narrow multi-lane card',data:{lessonId:lesson.id,lane,laneCount,rectW:rect.width,height:rect.height},timestamp:Date.now()})}).catch(()=>{});
-    }
-  }, [lane, laneCount, left, width, lesson.id]);
-  // #endregion
 
   const isOff = lesson.status !== "scheduled";
   const hasOverlap = conflicts.some((c) => c.type === "overlap");
@@ -141,11 +109,7 @@ export const LessonBlock = forwardRef<HTMLButtonElement, Props>(function LessonB
 
   return (
     <button
-      ref={(node) => {
-        measureRef.current = node;
-        if (typeof ref === "function") ref(node);
-        else if (ref) ref.current = node;
-      }}
+      ref={ref}
       type="button"
       title={title}
       onClick={(e) => onSelect?.(lesson, e.currentTarget)}
