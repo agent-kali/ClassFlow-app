@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { addDays, format, parseISO } from "date-fns";
 import { Badge, badgeClassName } from "@/components/Badge";
 import { TopBar } from "@/components/TopBar";
@@ -17,11 +17,14 @@ import { LessonPopover } from "@/features/manager/LessonPopover";
 import { CreateLessonDialog, type CreatePrefill } from "@/features/manager/CreateLessonDialog";
 import { ImportDialog } from "@/features/manager/ImportDialog";
 import { PayStrip } from "@/features/manager/PayStrip";
+import { ManagerTour } from "@/features/tour/ManagerTour";
 
 export default function ManagerPage() {
   return (
     <ClientOnly>
-      <ManagerScreen />
+      <Suspense fallback={null}>
+        <ManagerScreen />
+      </Suspense>
     </ClientOnly>
   );
 }
@@ -217,6 +220,7 @@ function ManagerScreen() {
           </button>
           <button
             type="button"
+            data-tour="import"
             onClick={() => setImporting(true)}
             className="rounded border border-line px-2.5 py-1 text-[12px] font-medium transition-colors hover:border-ink-faint"
           >
@@ -232,7 +236,7 @@ function ManagerScreen() {
         </div>
       </div>
 
-      <div className="flex min-h-0 flex-1">
+      <div className="flex min-h-0 flex-1" data-tour="timeline">
         <FilterRail
           filters={filters}
           toggle={toggle}
@@ -304,6 +308,7 @@ function ManagerScreen() {
         />
       )}
       {importing && <ImportDialog onClose={() => setImporting(false)} />}
+      <ManagerTour onOpenImport={() => setImporting(true)} />
     </div>
   );
 }

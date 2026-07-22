@@ -1,0 +1,134 @@
+"use client";
+
+import Link from "next/link";
+import { useEffect, useId, useState } from "react";
+import type { LandingCopy } from "./copy";
+import { demoHref, type Locale } from "./locale";
+
+const LINKS = [
+  { href: "#product", key: "product" as const },
+  { href: "#manager", key: "manager" as const },
+  { href: "#teacher", key: "teacher" as const },
+  { href: "#architecture", key: "architecture" as const },
+];
+
+export function LandingNav({
+  copy,
+  locale,
+  onLocale,
+}: {
+  copy: LandingCopy;
+  locale: Locale;
+  onLocale: (locale: Locale) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const menuId = useId();
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open]);
+
+  useEffect(() => {
+    document.body.style.overflow = open ? "hidden" : "";
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [open]);
+
+  const close = () => setOpen(false);
+
+  return (
+    <header className="sticky top-0 z-40 border-b border-line bg-surface/95 backdrop-blur-[2px]">
+      <div className="mx-auto flex max-w-6xl items-center gap-4 px-4 py-3 sm:px-6">
+        <a href="#top" className="text-[15px] font-bold tracking-tight text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent">
+          ClassFlow
+        </a>
+
+        <nav className="ml-2 hidden items-center gap-1 md:flex" aria-label="Landing">
+          {LINKS.map((link) => (
+            <a
+              key={link.href}
+              href={link.href}
+              className="rounded px-2.5 py-1 text-[13px] font-medium text-ink-mute transition-colors hover:bg-line-soft hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+            >
+              {copy.nav[link.key]}
+            </a>
+          ))}
+        </nav>
+
+        <div className="ml-auto flex items-center gap-2">
+          <div
+            role="group"
+            aria-label={copy.nav.langGroup}
+            className="flex overflow-hidden rounded border border-line"
+          >
+            {(["en", "vi"] as const).map((code) => (
+              <button
+                key={code}
+                type="button"
+                aria-pressed={locale === code}
+                onClick={() => onLocale(code)}
+                className={`cf-mono px-2 py-1 text-[11px] font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
+                  locale === code
+                    ? "bg-accent text-accent-ink"
+                    : "bg-surface text-ink-mute hover:text-ink"
+                }`}
+              >
+                {code === "en" ? copy.nav.langEn : copy.nav.langVi}
+              </button>
+            ))}
+          </div>
+
+          <Link
+            href={demoHref(locale)}
+            className="hidden rounded bg-accent px-3 py-1.5 text-[12px] font-semibold text-accent-ink transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent sm:inline-flex"
+          >
+            {copy.nav.exploreDemo}
+          </Link>
+
+          <button
+            type="button"
+            className="rounded border border-line px-2.5 py-1.5 text-[12px] font-medium md:hidden focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+            aria-expanded={open}
+            aria-controls={menuId}
+            onClick={() => setOpen((v) => !v)}
+          >
+            {open ? copy.nav.closeMenu : copy.nav.openMenu}
+          </button>
+        </div>
+      </div>
+
+      {open && (
+        <div
+          id={menuId}
+          className="border-t border-line bg-surface px-4 py-3 md:hidden"
+        >
+          <nav className="flex flex-col gap-1" aria-label="Landing mobile">
+            {LINKS.map((link) => (
+              <a
+                key={link.href}
+                href={link.href}
+                onClick={close}
+                className="rounded px-2 py-2 text-[14px] font-medium text-ink hover:bg-line-soft focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+              >
+                {copy.nav[link.key]}
+              </a>
+            ))}
+            <Link
+              href={demoHref(locale)}
+              onClick={close}
+              className="mt-2 rounded bg-accent px-3 py-2 text-center text-[13px] font-semibold text-accent-ink"
+            >
+              {copy.nav.exploreDemo}
+            </Link>
+          </nav>
+        </div>
+      )}
+    </header>
+  );
+}

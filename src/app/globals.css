@@ -495,6 +495,27 @@ body {
   .cf-travel-pulse { animation: none; }
 }
 
+/* Landing: subtle entrance for product vignettes. */
+@keyframes landing-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.landing-reveal {
+  animation: landing-reveal 0.55s ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-reveal {
+    animation: none;
+  }
+}
+
 ::selection {
   background: var(--accent);
   color: var(--accent-ink);
