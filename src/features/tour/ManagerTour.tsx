@@ -19,7 +19,7 @@ import {
 } from "@/features/landing/locale";
 import { formatTourProgress, getTourCopy } from "./copy";
 
-const TARGETS = ["import", "timeline", "teacher-nav"] as const;
+const TARGETS = ["import", "lesson-edit", "teacher-nav"] as const;
 type TourTarget = (typeof TARGETS)[number];
 
 interface AnchorRect {
@@ -46,7 +46,6 @@ export function ManagerTour({
   const langParam = searchParams.get("lang");
   const locale = resolveTourLocale(langParam);
 
-  // Persist query lang into the shared preference when the tour starts.
   useEffect(() => {
     if (!active) return;
     const fromQuery = parseLangParam(langParam);
@@ -70,7 +69,6 @@ export function ManagerTour({
     const qs = next.toString();
     const url = qs ? `${pathname}?${qs}` : pathname;
     router.replace(url, { scroll: false });
-    // Keep the address bar in sync even if the App Router replace is delayed.
     if (typeof window !== "undefined") {
       window.history.replaceState(window.history.state, "", url);
     }
@@ -82,9 +80,14 @@ export function ManagerTour({
       setRect(null);
       return;
     }
-    const r = el.getBoundingClientRect();
-    setRect({ top: r.top, left: r.left, width: r.width, height: r.height });
-    el.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
+    const block = target === "lesson-edit" ? "center" : "nearest";
+    el.scrollIntoView({ block, inline: "nearest", behavior: "auto" });
+    const apply = () => {
+      const r = el.getBoundingClientRect();
+      setRect({ top: r.top, left: r.left, width: r.width, height: r.height });
+    };
+    apply();
+    requestAnimationFrame(apply);
   }, [target]);
 
   useLayoutEffect(() => {
@@ -120,24 +123,24 @@ export function ManagerTour({
   if (!showing) return null;
 
   const stepCopy = copy.steps[step];
-  const pad = 6;
+  const pad = target === "lesson-edit" ? 8 : 6;
   const highlight = rect
     ? {
-        top: Math.max(8, rect.top - pad),
-        left: Math.max(8, rect.left - pad),
+        top: Math.max(4, rect.top - pad),
+        left: Math.max(4, rect.left - pad),
         width: rect.width + pad * 2,
         height: rect.height + pad * 2,
       }
     : null;
 
-  const panelStyle = positionPanel(highlight);
+  const panelStyle = positionPanel(highlight, target);
 
   return (
     <div className="pointer-events-none fixed inset-0 z-[80]" role="presentation">
       {highlight && (
         <div
           aria-hidden
-          className="absolute rounded border-2 border-accent shadow-[0_0_0_9999px_rgba(35,32,26,0.4)] transition-all duration-200"
+          className="absolute rounded border-2 border-accent shadow-[0_0_0_9999px_rgba(35,32,26,0.45)] transition-all duration-200"
           style={{
             top: highlight.top,
             left: highlight.left,
@@ -154,7 +157,7 @@ export function ManagerTour({
         aria-labelledby={titleId}
         aria-describedby={descId}
         tabIndex={-1}
-        className="pointer-events-auto absolute z-[81] w-[min(100%-1.5rem,22rem)] rounded border border-line bg-raised p-4 shadow-[var(--shadow-pop)] focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        className="pointer-events-auto absolute z-[81] w-[min(100%-1rem,20.5rem)] rounded border border-line bg-raised p-3.5 shadow-[var(--shadow-pop)] focus:outline-none focus-visible:ring-2 focus-visible:ring-accent sm:w-[min(100%-1.5rem,22rem)] sm:p-4"
         style={panelStyle}
       >
         <p className="cf-mono text-[10px] font-semibold uppercase tracking-wide text-accent">
@@ -167,66 +170,72 @@ export function ManagerTour({
           {stepCopy.body}
         </p>
 
-        <div className="mt-4 flex flex-wrap items-center gap-2">
-          {step === 0 && onOpenImport && (
-            <button
-              type="button"
-              onClick={onOpenImport}
-              className="rounded border border-line px-2.5 py-1.5 text-[12px] font-medium hover:border-ink-faint focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-            >
-              Import a schedule
-            </button>
-          )}
-          {step === 2 && (
-            <Link
-              href="/teacher"
-              className="rounded bg-accent px-2.5 py-1.5 text-[12px] font-semibold text-accent-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-            >
-              {copy.openTeacher}
-            </Link>
-          )}
-        </div>
+        {(step === 0 && onOpenImport) || step === 2 ? (
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            {step === 0 && onOpenImport && (
+              <button
+                type="button"
+                onClick={onOpenImport}
+                className="rounded border border-line px-2.5 py-1.5 text-[12px] font-medium hover:border-ink-faint focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+              >
+                Import a schedule
+              </button>
+            )}
+            {step === 2 && (
+              <Link
+                href="/teacher"
+                className="rounded bg-accent px-2.5 py-1.5 text-[12px] font-semibold text-accent-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+              >
+                {copy.openTeacher}
+              </Link>
+            )}
+          </div>
+        ) : null}
 
-        <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-line-soft pt-3">
-          <button
-            type="button"
-            disabled={step === 0}
-            onClick={() => setStep((s) => Math.max(0, s - 1))}
-            className="rounded border border-line px-2.5 py-1.5 text-[12px] font-medium disabled:opacity-40 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-          >
-            {copy.back}
-          </button>
-          {step < 2 ? (
+        <div className="mt-4 border-t border-line-soft pt-3">
+          <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
-              onClick={() => setStep((s) => Math.min(2, s + 1))}
-              className="rounded bg-accent px-2.5 py-1.5 text-[12px] font-semibold text-accent-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+              disabled={step === 0}
+              onClick={() => setStep((s) => Math.max(0, s - 1))}
+              className="rounded border border-line px-2.5 py-1.5 text-[12px] font-medium disabled:opacity-40 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
             >
-              {copy.next}
+              {copy.back}
             </button>
-          ) : (
+            {step < 2 ? (
+              <button
+                type="button"
+                onClick={() => setStep((s) => Math.min(2, s + 1))}
+                className="rounded bg-accent px-2.5 py-1.5 text-[12px] font-semibold text-accent-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+              >
+                {copy.next}
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={clearTourParam}
+                className="rounded bg-accent px-2.5 py-1.5 text-[12px] font-semibold text-accent-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+              >
+                {copy.finish}
+              </button>
+            )}
+          </div>
+          <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1">
             <button
               type="button"
               onClick={clearTourParam}
-              className="rounded bg-accent px-2.5 py-1.5 text-[12px] font-semibold text-accent-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+              className="cf-mono text-[11px] font-medium text-ink-faint hover:text-ink-mute focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
             >
-              {copy.finish}
+              {copy.skip}
             </button>
-          )}
-          <button
-            type="button"
-            onClick={clearTourParam}
-            className="ml-auto text-[12px] font-medium text-ink-mute hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-          >
-            {copy.skip}
-          </button>
-          <button
-            type="button"
-            onClick={() => window.location.reload()}
-            className="text-[12px] font-medium text-ink-mute hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-          >
-            {copy.reset}
-          </button>
+            <button
+              type="button"
+              onClick={() => window.location.reload()}
+              className="cf-mono text-[11px] font-medium text-ink-faint hover:text-ink-mute focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+            >
+              {copy.reset}
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -234,19 +243,51 @@ export function ManagerTour({
 }
 
 function positionPanel(
-  highlight: { top: number; left: number; width: number; height: number } | null
+  highlight: { top: number; left: number; width: number; height: number } | null,
+  target: TourTarget
 ): CSSProperties {
   if (typeof window === "undefined" || !highlight) {
     return { top: "50%", left: "50%", transform: "translate(-50%, -50%)" };
   }
+
   const gap = 12;
-  const panelW = 352;
+  const panelW = Math.min(352, window.innerWidth - 16);
+  const panelH = 260;
+  // Keep clear of the manager filter rail on md+.
+  const leftFloor = window.innerWidth >= 768 ? 200 : 8;
+
+  if (target === "lesson-edit") {
+    const rightOf = highlight.left + highlight.width + gap;
+    const fitsRight = rightOf + panelW <= window.innerWidth - 8;
+    if (fitsRight) {
+      return {
+        top: Math.min(
+          Math.max(8, highlight.top),
+          window.innerHeight - panelH - 8
+        ),
+        left: Math.max(leftFloor, rightOf),
+      };
+    }
+    const leftOf = highlight.left - gap - panelW;
+    if (leftOf >= leftFloor) {
+      return {
+        top: Math.min(
+          Math.max(8, highlight.top),
+          window.innerHeight - panelH - 8
+        ),
+        left: leftOf,
+      };
+    }
+  }
+
   const preferredTop = highlight.top + highlight.height + gap;
-  const fitsBelow = preferredTop + 220 < window.innerHeight;
-  const top = fitsBelow ? preferredTop : Math.max(12, highlight.top - gap - 220);
-  let left = highlight.left;
-  if (left + panelW > window.innerWidth - 12) {
-    left = Math.max(12, window.innerWidth - panelW - 12);
+  const fitsBelow = preferredTop + panelH < window.innerHeight;
+  const top = fitsBelow
+    ? preferredTop
+    : Math.max(8, highlight.top - gap - panelH);
+  let left = Math.max(leftFloor, highlight.left);
+  if (left + panelW > window.innerWidth - 8) {
+    left = Math.max(leftFloor, window.innerWidth - panelW - 8);
   }
   return { top, left };
 }

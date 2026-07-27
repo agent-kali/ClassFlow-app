@@ -236,7 +236,7 @@ function ManagerScreen() {
         </div>
       </div>
 
-      <div className="flex min-h-0 flex-1" data-tour="timeline">
+      <div className="flex min-h-0 flex-1">
         <FilterRail
           filters={filters}
           toggle={toggle}

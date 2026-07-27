@@ -24,6 +24,8 @@ interface Props {
   selected?: boolean;
   /** Pulse outline when this card is part of a focused travel gap. */
   travelHighlighted?: boolean;
+  /** Guided-tour spotlight target. */
+  tourTarget?: boolean;
   onSelect?: (lesson: Lesson, el: HTMLElement) => void;
 }
 
@@ -77,6 +79,7 @@ export const LessonBlock = forwardRef<HTMLButtonElement, Props>(function LessonB
     lookups,
     selected,
     travelHighlighted = false,
+    tourTarget = false,
     onSelect,
   },
   ref
@@ -114,6 +117,7 @@ export const LessonBlock = forwardRef<HTMLButtonElement, Props>(function LessonB
       title={title}
       onClick={(e) => onSelect?.(lesson, e.currentTarget)}
       data-lesson-id={lesson.id}
+      data-tour={tourTarget ? "lesson-edit" : undefined}
       data-lane={lane}
       data-selected={selected || undefined}
       data-conflict={hasOverlap || undefined}

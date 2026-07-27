@@ -39,8 +39,8 @@ export function TeacherPhoneVignette({ copy }: { copy: LandingCopy }) {
   const weekUsd = LESSONS.filter((l) => l.status === "scheduled").reduce((s, l) => s + l.usd, 0);
 
   return (
-    <div className="mx-auto w-full max-w-[320px]">
-      <div className="overflow-hidden rounded-[1.25rem] border border-line bg-raised shadow-[var(--shadow-pop)]">
+    <div className="mx-auto w-full max-w-[340px] origin-top scale-[1.02] sm:scale-105">
+      <div className="overflow-hidden rounded-[1.15rem] border border-line bg-raised shadow-[var(--shadow-pop)]">
         <div className="border-b border-line bg-surface px-4 py-3">
           <p className="cf-mono text-[10px] font-semibold uppercase tracking-wide text-ink-mute">
             {copy.teacher.phoneLabel}
@@ -58,13 +58,13 @@ export function TeacherPhoneVignette({ copy }: { copy: LandingCopy }) {
           </div>
         </div>
 
-        <ul className="divide-y divide-line-soft px-2 py-2">
+        <ul className="divide-y divide-line-soft px-2 py-1.5">
           {LESSONS.map((l) => {
             const cancelled = l.status === "cancelled";
             return (
               <li
                 key={l.code + l.day}
-                className={`flex items-start justify-between gap-2 rounded-md px-2 py-2.5 ${
+                className={`flex items-start justify-between gap-2 rounded-md px-2 py-2 ${
                   cancelled ? "opacity-70" : ""
                 }`}
               >

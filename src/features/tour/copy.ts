@@ -30,7 +30,7 @@ const en: TourCopy = {
     },
     {
       title: "Edit a lesson and watch impact",
-      body: "Click a lesson block to cancel, mark no-show, or move it. Double-bookings and tight travel gaps surface in the toolbar; the pay strip flashes the USD delta.",
+      body: "Select the highlighted LP12B01B lesson. Change its time or status to see schedule warnings and pay update.",
     },
     {
       title: "See the teacher schedule",
@@ -53,8 +53,8 @@ const vi: TourCopy = {
       body: "Mở Import a schedule để xem bảng tính đối tác và ánh xạ cột vào mô hình Lesson chuẩn. Xác nhận import sẽ thêm buổi học thật vào tuần này.",
     },
     {
-      title: "Sửa một buổi và xem tác động",
-      body: "Bấm một khối buổi học để hủy, đánh no-show, hoặc dời lịch. Trùng lịch và khoảng di chuyển sát hiện trên thanh công cụ; dải thù lao nháy delta USD.",
+      title: "Sửa một buổi học và xem tác động",
+      body: "Chọn buổi LP12B01B được đánh dấu. Đổi thời gian hoặc trạng thái để xem cảnh báo lịch và thù lao được cập nhật.",
     },
     {
       title: "Xem lịch giáo viên",

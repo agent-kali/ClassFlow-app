@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import type { ReactNode } from "react";
 import { getLandingCopy } from "./copy";
 import { LandingNav } from "./LandingNav";
 import { demoHref, useLocale } from "./locale";
@@ -19,10 +20,9 @@ export function LandingPage() {
       <LandingNav copy={copy} locale={locale} onLocale={setLocale} />
 
       <main>
-        {/* Hero */}
         <section
           id="product"
-          className="mx-auto grid max-w-6xl gap-10 px-4 py-14 sm:px-6 sm:py-20 lg:grid-cols-[1.05fr_0.95fr] lg:items-center lg:gap-12"
+          className="mx-auto grid max-w-6xl gap-8 px-4 py-12 sm:px-6 sm:py-16 lg:grid-cols-[1.05fr_0.95fr] lg:items-center lg:gap-12"
           aria-labelledby="hero-heading"
         >
           <div>
@@ -60,46 +60,68 @@ export function LandingPage() {
 
         <RuleDivider />
 
-        {/* Problem */}
-        <Section id="problem" headline={copy.problem.headline}>
+        <Section id="problem" headline={copy.problem.headline} tight>
           <NormalizationVignette copy={copy} />
         </Section>
 
-        <RuleDivider />
+        {/* Manager workflow — featured ledger band */}
+        <section
+          id="manager"
+          className="border-y border-line bg-[color-mix(in_srgb,var(--accent-soft)_18%,var(--ground))]"
+          aria-labelledby="manager-heading"
+        >
+          <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 sm:py-14">
+            <h2
+              id="manager-heading"
+              className="max-w-[28ch] text-[clamp(1.4rem,2.6vw,1.95rem)] font-bold leading-snug tracking-tight"
+            >
+              {copy.manager.headline}
+            </h2>
+            <div className="mt-7">
+              <WorkflowVignette copy={copy} />
+            </div>
+          </div>
+        </section>
 
-        {/* Manager workflow */}
-        <Section id="manager" headline={copy.manager.headline}>
-          <WorkflowVignette copy={copy} />
-        </Section>
+        {/* Sync centrepiece — strongest visual weight */}
+        <section
+          id="sync"
+          className="border-b border-line bg-surface"
+          aria-labelledby="sync-heading"
+        >
+          <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 sm:py-14">
+            <p className="cf-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-accent">
+              09:45 → 10:30
+            </p>
+            <h2
+              id="sync-heading"
+              className="mt-2 max-w-[30ch] text-[clamp(1.45rem,2.8vw,2.05rem)] font-bold leading-snug tracking-tight"
+            >
+              {copy.sync.headline}
+            </h2>
+            <div className="mt-7">
+              <SyncVignette copy={copy} />
+            </div>
+          </div>
+        </section>
 
-        <RuleDivider />
-
-        {/* Sync centrepiece */}
-        <Section id="sync" headline={copy.sync.headline}>
-          <SyncVignette copy={copy} />
-        </Section>
-
-        <RuleDivider />
-
-        {/* Teacher */}
+        {/* Teacher — compact reveal */}
         <section
           id="teacher"
-          className="mx-auto grid max-w-6xl gap-10 px-4 py-14 sm:px-6 sm:py-16 lg:grid-cols-[1fr_auto] lg:items-center"
+          className="mx-auto grid max-w-6xl items-center gap-6 px-4 py-10 sm:gap-8 sm:px-6 sm:py-12 lg:grid-cols-[minmax(0,1fr)_minmax(280px,340px)] lg:gap-10"
           aria-labelledby="teacher-heading"
         >
-          <div>
+          <div className="max-w-md">
             <h2
               id="teacher-heading"
               className="max-w-[24ch] text-[clamp(1.35rem,2.5vw,1.85rem)] font-bold leading-snug tracking-tight"
             >
               {copy.teacher.headline}
             </h2>
-            <p className="mt-3 max-w-lg text-[15px] leading-relaxed text-ink-mute">
-              {copy.teacher.body}
-            </p>
+            <p className="mt-3 text-[15px] leading-relaxed text-ink-mute">{copy.teacher.body}</p>
             <Link
               href="/teacher"
-              className="mt-6 inline-flex rounded border border-line bg-surface px-4 py-2.5 text-[13px] font-semibold transition-colors hover:border-ink-faint focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+              className="mt-5 inline-flex rounded border border-line bg-surface px-4 py-2.5 text-[13px] font-semibold transition-colors hover:border-ink-faint focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
             >
               {copy.hero.secondaryCta}
             </Link>
@@ -109,14 +131,10 @@ export function LandingPage() {
 
         <RuleDivider />
 
-        {/* Domain rules */}
-        <Section id="rules" headline={copy.rules.headline}>
+        <Section id="rules" headline={copy.rules.headline} tight>
           <ul className="divide-y divide-line border-y border-line">
             {copy.rules.items.map((rule) => (
-              <li
-                key={rule}
-                className="flex gap-4 py-3 text-[14px] leading-snug sm:text-[15px]"
-              >
+              <li key={rule} className="flex gap-4 py-2.5 text-[14px] leading-snug sm:text-[15px]">
                 <span className="cf-mono shrink-0 text-accent" aria-hidden>
                   —
                 </span>
@@ -128,11 +146,13 @@ export function LandingPage() {
 
         <RuleDivider />
 
-        {/* Architecture */}
-        <Section id="architecture" headline={copy.architecture.headline}>
-          <ul className="max-w-3xl space-y-3">
+        <Section id="architecture" headline={copy.architecture.headline} tight>
+          <ul className="max-w-3xl space-y-2.5">
             {copy.architecture.body.map((line) => (
-              <li key={line} className="flex gap-3 text-[14px] leading-relaxed text-ink-mute sm:text-[15px]">
+              <li
+                key={line}
+                className="flex gap-3 text-[14px] leading-relaxed text-ink-mute sm:text-[15px]"
+              >
                 <span className="cf-mono mt-1 text-[11px] text-accent" aria-hidden>
                   ◆
                 </span>
@@ -140,14 +160,14 @@ export function LandingPage() {
               </li>
             ))}
           </ul>
-          <p className="mt-8 max-w-3xl border-l-2 border-accent pl-4 text-[13px] leading-relaxed text-ink-mute">
+          <p className="mt-6 max-w-3xl border-l-2 border-accent pl-4 text-[13px] leading-relaxed text-ink-mute">
             {copy.architecture.honesty}
           </p>
         </Section>
       </main>
 
       <footer className="border-t border-line bg-surface">
-        <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6">
+        <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
           <p className="text-[clamp(1.25rem,2.5vw,1.6rem)] font-bold tracking-tight">
             {copy.footer.headline}
           </p>
@@ -165,7 +185,7 @@ export function LandingPage() {
               {copy.footer.teacherLink}
             </Link>
           </div>
-          <div className="mt-10 border-t border-line-soft pt-6">
+          <div className="mt-8 border-t border-line-soft pt-5">
             <p className="text-[14px] font-semibold">{copy.footer.credit}</p>
             <p className="cf-mono mt-1 text-[12px] text-ink-mute">{copy.footer.role}</p>
           </div>
@@ -179,15 +199,17 @@ function Section({
   id,
   headline,
   children,
+  tight = false,
 }: {
   id: string;
   headline: string;
-  children: React.ReactNode;
+  children: ReactNode;
+  tight?: boolean;
 }) {
   return (
     <section
       id={id}
-      className="mx-auto max-w-6xl px-4 py-14 sm:px-6 sm:py-16"
+      className={`mx-auto max-w-6xl px-4 sm:px-6 ${tight ? "py-10 sm:py-12" : "py-12 sm:py-14"}`}
       aria-labelledby={`${id}-heading`}
     >
       <h2
@@ -196,7 +218,7 @@ function Section({
       >
         {headline}
       </h2>
-      <div className="mt-8">{children}</div>
+      <div className="mt-6 sm:mt-7">{children}</div>
     </section>
   );
 }

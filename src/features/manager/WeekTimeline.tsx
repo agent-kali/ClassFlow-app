@@ -92,6 +92,20 @@ export function WeekTimeline({
   const scrollerRef = useRef<HTMLDivElement>(null);
   const anchoredWeekRef = useRef<string | null>(null);
 
+  /** Stable guided-tour target: first scheduled LP12B01B @ 18:00 in the visible week. */
+  const tourLessonId = useMemo(() => {
+    const daySet = new Set(days);
+    const candidates = lessons
+      .filter((l) => {
+        if (!daySet.has(l.date) || l.status !== "scheduled" || l.startMin !== 18 * 60) {
+          return false;
+        }
+        return lookups.classGroupsById.get(l.classGroupId)?.code === "LP12B01B";
+      })
+      .sort((a, b) => a.date.localeCompare(b.date) || a.startMin - b.startMin);
+    return candidates[0]?.id ?? null;
+  }, [days, lessons, lookups]);
+
   const [topMin, bottomMin] = useMemo(() => {
     let min = 9 * 60;
     let max = 18 * 60;
@@ -351,6 +365,7 @@ export function WeekTimeline({
                     lookups={lookups}
                     selected={selectedLessonId === lesson.id}
                     travelHighlighted={focusedLessonIds?.has(lesson.id) ?? false}
+                    tourTarget={lesson.id === tourLessonId}
                     onSelect={onSelectLesson}
                   />
                 ))}

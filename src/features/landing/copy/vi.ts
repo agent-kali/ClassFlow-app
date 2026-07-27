@@ -15,7 +15,7 @@ export const vi: LandingCopy = {
   },
   hero: {
     eyebrow: "Nguyên mẫu sản phẩm tương tác",
-    headline: "Biến lịch học rời rạc thành một nguồn vận hành thống nhất.",
+    headline: "Biến những lịch học rời rạc thành một nguồn dữ liệu vận hành duy nhất.",
     body: "ClassFlow chuẩn hóa dữ liệu trường học không đồng nhất, phát hiện rủi ro xếp lịch, giữ thù lao giáo viên đồng bộ, và biến mọi cập nhật của quản lý thành lịch rõ ràng cho giáo viên.",
     primaryCta: "Xem demo trực tiếp",
     secondaryCta: "Xem góc giáo viên",
@@ -41,7 +41,7 @@ export const vi: LandingCopy = {
     },
   },
   manager: {
-    headline: "Một không gian làm việc cho người chịu trách nhiệm toàn bộ lịch.",
+    headline: "Một không gian làm việc cho người quản lý toàn bộ lịch học.",
     steps: [
       "Nhập dữ liệu trường học không đồng nhất.",
       "Rà soát ánh xạ trước khi tạo buổi học.",
@@ -50,7 +50,7 @@ export const vi: LandingCopy = {
     ],
   },
   sync: {
-    headline: "Quản lý đổi một buổi học. Mọi phần phía sau vẫn nhất quán.",
+    headline: "Quản lý đổi một buổi học. Mọi thứ liên quan tự động cập nhật.",
     changeLabel: "Dời buổi học Thứ Tư từ 09:45 sang 10:30.",
     before: "Trước",
     after: "Sau",
@@ -68,30 +68,30 @@ export const vi: LandingCopy = {
     undoMove: "Xem trạng thái trước",
   },
   teacher: {
-    headline: "Giáo viên thấy đúng những gì cần—không phải quản lý hệ thống.",
+    headline: "Giáo viên chỉ thấy những gì họ cần — không phải quản trị cả hệ thống.",
     body: "Một lịch chỉ đọc trên mọi trường, với trạng thái buổi học, địa điểm, thời lượng và thù lao rõ ràng bằng USD và VND.",
     phoneLabel: "Góc giáo viên",
     earningsLabel: "Thù lao tuần",
     weekLabel: "Tuần này",
   },
   rules: {
-    headline: "Quy tắc miền được mã hóa trong sản phẩm",
+    headline: "Các quy tắc nghiệp vụ được mã hóa trong sản phẩm.",
     items: [
       "Lesson là đơn vị nguyên tử.",
       "Quản lý ghi; giáo viên đọc.",
-      "Thù lao suy ra từ số giờ đã dạy.",
+      "Thù lao được suy ra từ số giờ đã dạy.",
       "Buổi hủy và no-show không được trả.",
-      "VND suy ra từ một tỷ giá USD.",
+      "VND được suy ra từ một tỷ giá USD.",
       "Chiều cao buổi học phản ánh thời lượng.",
       "Rủi ro xếp lịch được suy ra, không nhập tay.",
     ],
   },
   architecture: {
-    headline: "Xây như một hệ thống sản phẩm, không phải mockup portfolio tĩnh.",
+    headline: "Được xây dựng như một hệ thống sản phẩm, không phải mockup portfolio tĩnh.",
     body: [
       "Next.js App Router, React và TypeScript với mô hình miền Lesson có kiểu.",
       "Màn quản lý và giáo viên chiếu cùng một store trong bộ nhớ qua hook dùng chung.",
-      "Xung đột, khoảng di chuyển và thù lao được suy ra bằng hàm miền thuần—không nhập tay.",
+      "Xung đột, khoảng di chuyển và thù lao được suy ra bằng hàm miền thuần — không nhập tay.",
       "UI gọi qua lớp DataSource, nên API thật có thể thay fixture mà không viết lại màn hình.",
       "Primitive tái sử dụng (Badge, MoneyPair, thẻ lịch) giữ hai vai trò nhất quán về hình ảnh.",
     ],
