@@ -11,7 +11,25 @@ npm install
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000). No backend, no auth, no database — all state lives in memory and resets on reload.
+Open [http://localhost:3000](http://localhost:3000). The Next.js demo still uses in-memory mock data (no auth, no database); state resets on reload. A separate FastAPI process in `backend/` currently exposes only a health check.
+
+## Backend
+
+```bash
+cd backend
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements.txt
+python -m uvicorn app.main:app --reload
+```
+
+Health check: [http://127.0.0.1:8000/health](http://127.0.0.1:8000/health)
+
+```bash
+cd backend
+source .venv/bin/activate
+python -m pytest -q
+```
 
 ## The two screens
 
