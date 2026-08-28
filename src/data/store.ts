@@ -46,6 +46,8 @@ interface ClassFlowState {
 
   createLesson(input: LessonInput): Lesson;
   updateLesson(id: string, patch: Partial<LessonInput>): void;
+  /** Edit any lesson field; a changed day or start time keeps the move visible. */
+  editLesson(id: string, patch: Partial<LessonInput>): void;
   setLessonStatus(id: string, status: LessonStatus): void;
   rescheduleLesson(id: string, date: string, startMin: number, endMin: number): void;
   importLessons(inputs: LessonInput[]): Lesson[];
@@ -58,6 +60,11 @@ function payableUsd(lesson: Lesson, teachers: Teacher[]): number {
   if (!isPayable(lesson)) return 0;
   const teacher = teachers.find((t) => t.id === lesson.teacherId);
   return teacher ? lessonHours(lesson) * teacher.usdRate : 0;
+}
+
+/** The origin a move is measured from: the first one, not the latest hop. */
+function moveOrigin(before: Lesson): { date: string; startMin: number } {
+  return before.movedFrom ?? { date: before.date, startMin: before.startMin };
 }
 
 const seedDate = new Date();
@@ -100,6 +107,15 @@ export const useClassFlowStore = create<ClassFlowState>((set, get) => ({
     });
   },
 
+  editLesson(id, patch) {
+    const before = get().lessons.find((l) => l.id === id);
+    if (!before) return;
+    const moved =
+      (patch.date !== undefined && patch.date !== before.date) ||
+      (patch.startMin !== undefined && patch.startMin !== before.startMin);
+    get().updateLesson(id, moved ? { ...patch, movedFrom: moveOrigin(before) } : patch);
+  },
+
   setLessonStatus(id, status) {
     get().updateLesson(id, { status });
   },
@@ -107,12 +123,7 @@ export const useClassFlowStore = create<ClassFlowState>((set, get) => ({
   rescheduleLesson(id, date, startMin, endMin) {
     const before = get().lessons.find((l) => l.id === id);
     if (!before) return;
-    get().updateLesson(id, {
-      date,
-      startMin,
-      endMin,
-      movedFrom: before.movedFrom ?? { date: before.date, startMin: before.startMin },
-    });
+    get().updateLesson(id, { date, startMin, endMin, movedFrom: moveOrigin(before) });
   },
 
   importLessons(inputs) {

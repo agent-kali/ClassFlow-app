@@ -25,11 +25,11 @@ export function ThemeToggle() {
     <button
       type="button"
       onClick={toggle}
-      className="cf-mono flex items-center gap-1.5 rounded border border-line px-2 py-1 text-[11px] text-ink-mute transition-colors hover:border-ink-faint hover:text-ink"
+      className="cf-mono flex shrink-0 items-center gap-1 rounded border border-line px-1.5 py-1 text-[11px] text-ink-mute transition-colors hover:border-ink-faint hover:text-ink sm:gap-1.5 sm:px-2"
       aria-label={`Switch to ${target} theme`}
     >
       {target === "dark" ? <MoonIcon /> : <SunIcon />}
-      <span>{target === "dark" ? "Dark" : "Light"}</span>
+      <span className="hidden sm:inline">{target === "dark" ? "Dark" : "Light"}</span>
     </button>
   );
 }

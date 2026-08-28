@@ -13,7 +13,13 @@ import { SchoolChip } from "@/components/SchoolChip";
  * exactly as it arrives, flowing column by column into one canonical
  * lesson model — then actually landing on the schedule.
  */
-export function ImportDialog({ onClose }: { onClose: () => void }) {
+export function ImportDialog({
+  onClose,
+  stackAboveTour = false,
+}: {
+  onClose: () => void;
+  stackAboveTour?: boolean;
+}) {
   const schools = useSchools();
   const today = useToday();
   const lookups = useLookups();
@@ -33,9 +39,14 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
   return (
     <Dialog.Root open onOpenChange={(o) => !o && onClose()}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-40 bg-black/35" />
+        <Dialog.Overlay
+          className={`fixed inset-0 bg-black/35 ${stackAboveTour ? "z-[84]" : "z-40"}`}
+        />
         <Dialog.Content
-          className="fixed top-1/2 left-1/2 z-50 flex max-h-[92dvh] w-[54rem] max-w-[calc(100vw-2rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-lg border border-line bg-surface"
+          data-tour-allowed={stackAboveTour ? "" : undefined}
+          className={`fixed top-1/2 left-1/2 flex max-h-[92dvh] w-[54rem] max-w-[calc(100vw-2rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-lg border border-line bg-surface ${
+            stackAboveTour ? "z-[85]" : "z-50"
+          }`}
           style={{ boxShadow: "var(--shadow-pop)" }}
         >
           <div className="border-b border-line px-4 py-3">

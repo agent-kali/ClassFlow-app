@@ -12,7 +12,8 @@ import type { Lesson, Room } from "./types";
 export const MIN_TRAVEL_GAP_MINUTES = 45;
 
 export type Conflict =
-  | { type: "overlap"; kind: "teacher" | "room"; lessonIds: [string, string] }
+  | { type: "overlap"; kind: "teacher"; lessonIds: [string, string] }
+  | { type: "overlap"; kind: "room"; lessonIds: [string, string] }
   | {
       type: "travel";
       teacherId: string;
@@ -20,8 +21,22 @@ export type Conflict =
       gapMin: number;
     };
 
+export type TeacherOverlap = Extract<Conflict, { type: "overlap"; kind: "teacher" }>;
+
+export function isTeacherOverlap(c: Conflict): c is TeacherOverlap {
+  return c.type === "overlap" && c.kind === "teacher";
+}
+
+/** Inclusive overlap length; 0 if the intervals only touch or do not meet. */
+export function overlapMinutes(
+  a: Pick<Lesson, "startMin" | "endMin">,
+  b: Pick<Lesson, "startMin" | "endMin">
+): number {
+  return Math.max(0, Math.min(a.endMin, b.endMin) - Math.max(a.startMin, b.startMin));
+}
+
 function overlaps(a: Lesson, b: Lesson): boolean {
-  return a.date === b.date && a.startMin < b.endMin && b.startMin < a.endMin;
+  return a.date === b.date && a.startMin < b.endMin && a.endMin > b.startMin;
 }
 
 export function detectConflicts(
@@ -76,6 +91,29 @@ export function detectConflicts(
   }
 
   return conflicts;
+}
+
+/** Stable identity for a conflict, so two detections can be compared. */
+export function conflictKey(c: Conflict): string {
+  const kind = c.type === "overlap" ? c.kind : c.type;
+  return `${c.type}:${kind}:${[...c.lessonIds].sort().join("|")}`;
+}
+
+/**
+ * What a pending edit is responsible for: conflicts around `lessonId` that
+ * exist in `after` but did not in `before`. Pre-existing conflicts stay out —
+ * the manager is warned about the consequence of this edit, nothing else.
+ */
+export function conflictsIntroduced(
+  before: Lesson[],
+  after: Lesson[],
+  roomsById: Map<string, Room>,
+  lessonId: string
+): Conflict[] {
+  const existing = new Set(detectConflicts(before, roomsById).map(conflictKey));
+  return detectConflicts(after, roomsById).filter(
+    (c) => c.lessonIds.includes(lessonId) && !existing.has(conflictKey(c))
+  );
 }
 
 /** Lesson id → the conflicts it participates in. */

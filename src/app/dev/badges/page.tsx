@@ -162,7 +162,7 @@ export default function BadgesDevPage() {
                 <>
                   <Badge size="sm" tone="delivered">delivered</Badge>
                   <Badge tone="school" size="sm" school={schools[0]}>
-                    LLA
+                    OT
                   </Badge>
                 </>
               }
@@ -176,7 +176,7 @@ export default function BadgesDevPage() {
                 <>
                   <Badge size="sm" tone="planned">now</Badge>
                   <Badge tone="school" size="sm" school={schools[0]}>
-                    LLA
+                    OT
                   </Badge>
                 </>
               }
@@ -190,7 +190,7 @@ export default function BadgesDevPage() {
                 <>
                   <Badge size="sm" tone="cancelled">cancelled</Badge>
                   <Badge tone="school" size="sm" school={schools[0]}>
-                    LLA
+                    OT
                   </Badge>
                 </>
               }
@@ -204,7 +204,7 @@ export default function BadgesDevPage() {
                 <>
                   <Badge size="sm" tone="cancelled">no-show</Badge>
                   <Badge tone="school" size="sm" school={schools[1]}>
-                    SJS
+                    SY
                   </Badge>
                 </>
               }

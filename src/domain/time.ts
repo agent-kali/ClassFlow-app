@@ -13,8 +13,25 @@ export function formatMin(min: number): string {
   return `${h}:${String(m).padStart(2, "0")}`;
 }
 
+/** Padded hours for agenda display — "07:50". */
+export function formatAgendaMin(min: number): string {
+  const h = Math.floor(min / 60);
+  const m = min % 60;
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+}
+
 export function formatRange(startMin: number, endMin: number): string {
   return `${formatMin(startMin)}–${formatMin(endMin)}`;
+}
+
+/** Minutes → human duration — "45 min", "1h", "1h 5m". Never a raw decimal. */
+export function formatDuration(minutes: number): string {
+  const total = Math.round(minutes);
+  const h = Math.floor(total / 60);
+  const m = total % 60;
+  if (h === 0) return `${m} min`;
+  if (m === 0) return `${h}h`;
+  return `${h}h ${m}m`;
 }
 
 export function toIsoDate(d: Date): string {

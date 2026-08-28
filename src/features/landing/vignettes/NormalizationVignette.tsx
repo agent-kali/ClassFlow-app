@@ -2,27 +2,27 @@ import type { LandingCopy } from "../copy";
 
 const RAW_ROWS = [
   {
-    school: "LLA",
+    school: "OT",
     color: "var(--school-teal)",
     cells: ["TUE 07/14", "6:00-7:00PM", "LP12B01B", "205", "DAV"],
   },
   {
-    school: "SJS",
+    school: "SY",
     color: "var(--school-amber)",
-    cells: ["MON", "15:30-16:15", "SJ3", "Ocean (203)", "Katya"],
+    cells: ["MON", "15:30-16:15", "SJ3", "203", "Katya"],
   },
   {
-    school: "IEC",
+    school: "LD",
     color: "var(--school-plum)",
-    cells: ["14/07", "09:00–10:30", "IL401", "P.201", "MIR"],
+    cells: ["14/07", "09:00–10:30", "IL401", "401", "MIR"],
   },
 ];
 
 const CANONICAL = [
   { key: "teacher", value: "DAV · David Okafor" },
   { key: "group", value: "LP12B01B" },
-  { key: "school", value: "LLA" },
-  { key: "campus", value: "Nguyen Dinh Chieu" },
+  { key: "school", value: "OT" },
+  { key: "campus", value: "OT03" },
   { key: "time", value: "18:00–19:00" },
   { key: "duration", value: "60 min" },
   { key: "status", value: "scheduled" },

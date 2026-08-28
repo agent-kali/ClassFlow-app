@@ -52,6 +52,24 @@
   --card-border-cancelled: var(--line);
   --card-bg-cancelled: var(--surface);
   --card-opacity-cancelled: 0.75;
+
+  /* Ambient Field lesson-card tokens */
+  --lc-surface: #fdfbf6;
+  --lc-border: #e7e0d1;
+  --lc-text: #2a2418;
+  --lc-text-muted: #6f6a5e;
+  --lc-text-faint: #8a8375;
+  --lc-conflict: #c0442f;
+  --lc-now-line: #4a453b;
+  --lc-focus: #2563eb;
+  --lc-radius-micro: 13px;
+  --lc-radius-compact: 15px;
+  --lc-radius-regular: 17px;
+  --lc-radius-expanded: 19px;
+  --lc-elev-default: 0 1px 2px rgba(35, 32, 26, 0.06);
+  --lc-elev-hover: 0 10px 20px -8px rgba(35, 32, 26, 0.22);
+  --lc-elev-selected: 0 14px 28px -10px rgba(35, 32, 26, 0.28);
+  --lc-elev-conflict: 0 3px 11px -3px rgba(192, 68, 47, 0.22);
 }
 
 [data-theme="dark"] {
@@ -119,6 +137,16 @@ body {
   font-family: var(--font-plex-sans), system-ui, sans-serif;
   font-size: 14px;
   -webkit-font-smoothing: antialiased;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+input,
+textarea,
+select,
+[contenteditable="true"] {
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 /* Codes, times, and money are always set in the mono face with tabular figures. */
@@ -126,240 +154,6 @@ body {
   font-family: var(--font-plex-mono), ui-monospace, monospace;
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.01em;
-}
-
-/*
- * Adaptive lesson card — size buckets via container queries.
- * Tiers drop whole fields bottom-up; never mid-token ellipsis on time/codes/badges.
- * Full-width (laneCount = 1):
- *   micro  (default / very short): T1 only — color spine + code + start, stacked
- *   narrow (≥36×32):  + T2 teacher
- *   medium (≥88×46):  + T3 room (+CM when wide enough)
- *   full   (≥118×60): + T4 curriculum
- * Multi-lane clusters stay compact (code + start) until ≥84px, then detail
- * tiers unlock gradually. Hover title always carries the full tooltip.
- */
-/* Multi-lane clusters: compact until the lane clears COMPACT_LANE_WIDTH_PX (84). */
-.cf-lesson--lanes .cf-lesson__t2,
-.cf-lesson--lanes .cf-lesson__t3,
-.cf-lesson--lanes .cf-lesson__t4,
-.cf-lesson--lanes .cf-lesson__flag {
-  display: none;
-}
-
-.cf-lesson--lanes .cf-lesson__body {
-  padding: 2px 3px;
-  gap: 1px;
-}
-
-.cf-lesson--lanes .cf-lesson__t1 {
-  flex-direction: column;
-  align-items: flex-start;
-}
-
-.cf-lesson--lanes .cf-lesson__code {
-  font-size: 9px;
-}
-
-.cf-lesson--lanes .cf-lesson__time {
-  font-size: 8px;
-}
-
-/* Side-by-side T1 once code + start fit on one row. */
-@container lesson (min-width: 72px) {
-  .cf-lesson--lanes .cf-lesson__t1 {
-    flex-direction: row;
-    flex-wrap: nowrap;
-    align-items: baseline;
-    gap: 5px;
-  }
-
-  .cf-lesson--lanes .cf-lesson__code {
-    font-size: 11px;
-  }
-
-  .cf-lesson--lanes .cf-lesson__time {
-    font-size: 10px;
-  }
-
-  .cf-lesson--lanes .cf-lesson__flag {
-    display: inline-flex;
-  }
-
-  .cf-lesson--lanes .cf-lesson__body {
-    padding: 3px 5px;
-    gap: 2px;
-  }
-}
-
-/* Teacher only when the short code fits under the title row. */
-@container lesson (min-width: 84px) and (min-height: 36px) {
-  .cf-lesson--lanes .cf-lesson__t2 {
-    display: block;
-  }
-}
-
-/* Room / CM / curriculum need real width — prefer tooltip over mid-token clip. */
-@container lesson (min-width: 120px) and (min-height: 48px) {
-  .cf-lesson--lanes .cf-lesson__t3 {
-    display: flex;
-  }
-}
-
-@container lesson (min-width: 140px) {
-  .cf-lesson--lanes .cf-lesson__cm {
-    display: inline;
-  }
-}
-
-@container lesson (min-width: 150px) and (min-height: 60px) {
-  .cf-lesson--lanes .cf-lesson__t4 {
-    display: block;
-  }
-}
-
-.cf-lesson {
-  container-type: size;
-  container-name: lesson;
-}
-
-.cf-lesson__body {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  height: 100%;
-  padding: 2px 5px;
-  overflow: hidden;
-}
-
-.cf-lesson__t1 {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 0;
-  min-width: 0;
-  line-height: 1.15;
-}
-
-.cf-lesson__code {
-  font-size: 10px;
-  white-space: nowrap;
-}
-
-.cf-lesson__time {
-  font-size: 9px;
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-
-.cf-lesson__flag {
-  display: none;
-  margin-left: auto;
-  flex-shrink: 0;
-  border-radius: 2px;
-  padding: 0 3px;
-  font-size: 9px;
-  font-weight: 700;
-  text-transform: uppercase;
-  white-space: nowrap;
-  line-height: 1.4;
-}
-
-.cf-lesson__t2,
-.cf-lesson__t3,
-.cf-lesson__t4 {
-  display: none;
-  min-width: 0;
-  line-height: 1.15;
-}
-
-.cf-lesson__t2 {
-  font-size: 10px;
-  white-space: nowrap;
-}
-
-.cf-lesson__t3 {
-  flex-direction: row;
-  align-items: center;
-  gap: 4px;
-}
-
-.cf-lesson__room {
-  white-space: nowrap;
-  border-radius: 3px;
-  padding: 0 3px;
-  font-size: 10px;
-}
-
-.cf-lesson__cm {
-  display: none;
-  white-space: nowrap;
-  font-size: 10px;
-}
-
-.cf-lesson__t4 {
-  font-size: 10px;
-  white-space: nowrap;
-  overflow: hidden;
-}
-
-/* Narrow+: show teacher; keep T1 stacked so code + time stay whole tokens. */
-@container lesson (min-width: 36px) and (min-height: 32px) {
-  .cf-lesson__t2 {
-    display: block;
-  }
-}
-
-/* Side-by-side T1 once the lane can hold code + time on one row. */
-@container lesson (min-width: 72px) {
-  .cf-lesson__t1 {
-    flex-direction: row;
-    flex-wrap: nowrap;
-    align-items: baseline;
-    gap: 5px;
-  }
-
-  .cf-lesson__code {
-    font-size: 11px;
-  }
-
-  .cf-lesson__time {
-    font-size: 10px;
-  }
-
-  .cf-lesson__flag {
-    display: inline-flex;
-  }
-
-  .cf-lesson__body {
-    padding: 3px 6px;
-    gap: 2px;
-  }
-}
-
-/* Medium: room badge. */
-@container lesson (min-width: 88px) and (min-height: 44px) {
-  .cf-lesson__t3 {
-    display: flex;
-  }
-}
-
-/* CM only when the badge row has room for a full "+XXX" token. */
-@container lesson (min-width: 112px) {
-  .cf-lesson__cm {
-    display: inline;
-  }
-}
-
-/* Full: curriculum / material line. */
-@container lesson (min-width: 118px) and (min-height: 58px) {
-  .cf-lesson__t4 {
-    display: block;
-  }
-
-  .cf-lesson__body {
-    padding: 4px 6px;
-  }
 }
 
 /* School identity hooks — resolved from data, applied as CSS vars. */
@@ -471,6 +265,28 @@ body {
   animation: cf-travel-pulse 1.6s ease-out forwards;
 }
 
+/* Double-booking focus: a short wash, then a soft static red that stays
+ * until the conflict context is dismissed — not on a timer. */
+@keyframes cf-conflict-pulse {
+  0% {
+    box-shadow: inset 0 0 0 999px color-mix(in srgb, var(--danger-soft) 80%, transparent);
+  }
+  100% {
+    box-shadow: inset 0 0 0 999px transparent;
+  }
+}
+.lesson-card__focus-pulse {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 2;
+  animation: cf-conflict-pulse 0.7s ease-out forwards;
+}
+.lesson-card--conflict-focus {
+  z-index: 3;
+}
+
 /* Pay delta that rises from the edited lesson, at the point of edit. */
 @keyframes cf-delta-rise {
   0% { opacity: 0; transform: translateY(6px) scale(0.9); }
@@ -493,6 +309,7 @@ body {
   .cf-delta-rise { animation: none; opacity: 1; }
   .cf-pulse { animation: none; }
   .cf-travel-pulse { animation: none; }
+  .lesson-card__focus-pulse { animation: none; }
 }
 
 /* Landing: subtle entrance for product vignettes. */
@@ -519,4 +336,924 @@ body {
 ::selection {
   background: var(--accent);
   color: var(--accent-ink);
+}
+
+/* Agenda lesson cards */
+.lesson-card {
+  position: relative;
+  flex-shrink: 0;
+  height: var(--agenda-card-h, 72px);
+  min-height: var(--agenda-card-h, 72px);
+  max-height: var(--agenda-card-h, 72px);
+  cursor: pointer;
+  border-radius: 13px;
+  outline: none;
+  overflow: hidden;
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease,
+    opacity 0.2s ease;
+}
+.lesson-card--dragging {
+  opacity: 0.45;
+  transform: scale(0.98);
+  box-shadow: var(--lc-elev-hover);
+}
+.lesson-card--travel-focus {
+  box-shadow: 0 0 0 2px var(--warn-soft);
+}
+.lesson-card[data-past="true"] .lesson-card__surface {
+  opacity: 0.72;
+}
+.lesson-card[data-selected="true"] {
+  box-shadow: var(--lc-elev-selected);
+}
+.lesson-card:hover {
+  box-shadow: var(--lc-elev-hover);
+}
+.lesson-card:focus-visible {
+  outline: 2px solid var(--lc-focus);
+  outline-offset: 2px;
+}
+
+.lesson-card__surface {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  overflow: hidden;
+  background: var(--lc-surface);
+  border: 1px solid var(--lc-border);
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+}
+.lesson-card[data-selected="true"] .lesson-card__surface {
+  border-color: color-mix(in oklab, var(--lc-accent) 45%, var(--lc-border));
+}
+.lesson-card:hover .lesson-card__surface {
+  border-color: color-mix(in oklab, var(--ink-faint) 60%, var(--lc-border));
+}
+.lesson-card--conflict-focus .lesson-card__surface,
+.lesson-card--conflict-focus[data-selected="true"] .lesson-card__surface,
+.lesson-card--conflict-focus:hover .lesson-card__surface {
+  border-color: color-mix(in srgb, var(--lc-conflict) 50%, var(--lc-border));
+  background: color-mix(in srgb, var(--danger-soft) 55%, var(--lc-surface));
+}
+
+.lesson-card__accent {
+  position: absolute;
+  left: 0;
+  top: 8px;
+  bottom: 8px;
+  width: 2px;
+  border-radius: 1px;
+}
+.lesson-card__accent--conflict {
+  background: var(--danger);
+}
+.lesson-card__accent--travel {
+  background: var(--warn);
+}
+
+.lesson-card__body {
+  position: absolute;
+  inset: 0;
+  padding: 12px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  min-width: 0;
+  overflow: hidden;
+}
+.lesson-card__accent ~ .lesson-card__body {
+  padding-left: 14px;
+}
+.lesson-card__time {
+  font-size: 13px;
+  line-height: 1.2;
+  white-space: nowrap;
+  flex-shrink: 0;
+  overflow: visible;
+}
+.lesson-card__time-start {
+  font-weight: 700;
+  color: var(--lc-text);
+}
+.lesson-card__time-sep {
+  font-weight: 400;
+  color: var(--lc-text-faint);
+}
+.lesson-card__time-end {
+  font-weight: 500;
+  color: var(--lc-text-muted);
+}
+.lesson-card__meta {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+  flex-shrink: 0;
+}
+.lesson-card__teacher {
+  flex-shrink: 0;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--lc-accent);
+}
+.lesson-card__class {
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--lc-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.lesson-card__location {
+  font-size: 10.5px;
+  line-height: 1.2;
+  color: var(--lc-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 0;
+}
+.lesson-card__status {
+  font-size: 10px;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 0;
+}
+.lesson-card__status--conflict {
+  color: var(--danger);
+}
+.lesson-card__status--travel {
+  color: var(--warn);
+}
+
+.week-agenda {
+  --agenda-card-h: 72px;
+  --agenda-gap: 9px;
+}
+.week-agenda__board {
+  min-width: min(100%, 880px);
+}
+.week-agenda__header {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(140px, 1fr));
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+}
+.week-agenda__header-cell {
+  border-left: 1px solid var(--line-soft);
+  padding: 6px 8px;
+}
+.week-agenda__header-cell--today {
+  background: var(--accent-soft);
+}
+.week-agenda__columns {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(140px, 1fr));
+  align-items: start;
+}
+.week-agenda__columns--single {
+  grid-template-columns: minmax(0, 1fr);
+}
+.week-agenda__day {
+  border-left: 1px solid var(--line-soft);
+  min-width: 0;
+}
+.week-agenda__day--today {
+  background: color-mix(in oklab, var(--accent-soft) 30%, transparent);
+}
+.week-agenda__stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--agenda-gap);
+  padding: var(--agenda-gap);
+  min-height: 120px;
+}
+.week-agenda__stack > * {
+  transition: transform 0.2s ease, opacity 0.2s ease;
+}
+.week-agenda__period {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  padding: 2px 0;
+}
+.week-agenda__period::before,
+.week-agenda__period::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--line-soft);
+}
+.week-agenda__period-label {
+  flex-shrink: 0;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--ink-faint);
+}
+.week-agenda__empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 80px;
+  font-size: 11px;
+  color: var(--ink-faint);
+  border: 1px dashed var(--line-soft);
+  border-radius: 6px;
+}
+.week-agenda__insert {
+  flex-shrink: 0;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+  margin: -2px 0;
+  transition: opacity 0.18s ease;
+}
+.week-agenda__mobile-nav {
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  padding: 8px;
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+  -webkit-overflow-scrolling: touch;
+}
+.week-agenda__day-tab {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--line-soft);
+  background: var(--ground);
+  color: var(--ink-mute);
+  position: relative;
+}
+.week-agenda__day-tab--active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.week-agenda__day-tab--today:not(.week-agenda__day-tab--active) {
+  border-color: color-mix(in oklab, var(--accent) 40%, var(--line-soft));
+}
+.week-agenda__day-count {
+  position: absolute;
+  top: 2px;
+  right: 4px;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 8px;
+  font-weight: 700;
+  color: var(--ink-faint);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lesson-card,
+  .lesson-card__surface {
+    transition-duration: 0.01ms !important;
+    animation: none !important;
+  }
+}
+
+/* ── Manager schedule toolbar ──────────────────────────────────────────── */
+.schedule-toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  padding: 6px 16px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+}
+.schedule-toolbar__nav-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.schedule-toolbar__nav {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 4px;
+}
+.schedule-toolbar__arrow,
+.schedule-toolbar__now,
+.schedule-toolbar__clear {
+  border-radius: 4px;
+  border: 1px solid var(--line);
+  background: transparent;
+  transition:
+    border-color 0.15s ease,
+    color 0.15s ease;
+}
+.schedule-toolbar__arrow {
+  padding: 2px 6px;
+  font-size: 12px;
+  color: var(--ink-mute);
+}
+.schedule-toolbar__arrow:hover {
+  border-color: var(--ink-faint);
+  color: var(--ink);
+}
+.schedule-toolbar__now {
+  padding: 2px 6px;
+  font-size: 11px;
+  color: var(--accent);
+}
+.schedule-toolbar__now:hover {
+  border-color: var(--accent);
+}
+.schedule-toolbar__clear {
+  padding: 2px 6px;
+  font-size: 11px;
+  color: var(--ink-mute);
+}
+.schedule-toolbar__clear:hover {
+  border-color: var(--ink-faint);
+  color: var(--ink);
+}
+.schedule-toolbar__title {
+  min-width: 0;
+  flex: 1 1 auto;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+.schedule-toolbar__title-compact {
+  display: inline;
+}
+.schedule-toolbar__title-full {
+  display: none;
+}
+.schedule-toolbar__status-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.schedule-toolbar__badge {
+  max-width: 100%;
+}
+.schedule-toolbar__no-conflicts {
+  font-size: 11px;
+  color: var(--ink-faint);
+}
+.schedule-toolbar__actions-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.schedule-toolbar__filters,
+.schedule-toolbar__import {
+  flex-shrink: 0;
+  border-radius: 4px;
+  border: 1px solid var(--line);
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  background: transparent;
+  transition:
+    border-color 0.15s ease,
+    color 0.15s ease;
+}
+.schedule-toolbar__filters:hover,
+.schedule-toolbar__import:hover {
+  border-color: var(--ink-faint);
+}
+.schedule-toolbar__import-short {
+  display: inline;
+}
+.schedule-toolbar__import-full {
+  display: none;
+}
+.schedule-toolbar__new {
+  flex-shrink: 0;
+  border-radius: 4px;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent-ink);
+  background: var(--accent);
+  transition: opacity 0.15s ease;
+}
+.schedule-toolbar__new:hover {
+  opacity: 0.9;
+}
+
+@media (min-width: 1280px) {
+  .schedule-toolbar {
+    flex-direction: row;
+    align-items: center;
+    flex-wrap: nowrap;
+    gap: 12px;
+  }
+  .schedule-toolbar__title-full {
+    display: inline;
+  }
+  .schedule-toolbar__title-compact {
+    display: none;
+  }
+  .schedule-toolbar__import-short {
+    display: none;
+  }
+  .schedule-toolbar__import-full {
+    display: inline;
+  }
+  .schedule-toolbar__status-row {
+    flex-wrap: nowrap;
+  }
+  .schedule-toolbar__actions-row {
+    margin-left: auto;
+    flex-shrink: 0;
+  }
+}
+
+/* ── Week | Day mode control ───────────────────────────────────────────── */
+.view-toggle {
+  display: inline-flex;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  overflow: hidden;
+  background: var(--ground);
+}
+.view-toggle__option {
+  padding: 2px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ink-mute);
+  background: transparent;
+  transition: color 0.15s ease, background-color 0.15s ease;
+}
+.view-toggle__option + .view-toggle__option {
+  border-left: 1px solid var(--line);
+}
+.view-toggle__option:hover:not(:disabled) {
+  color: var(--ink);
+}
+.view-toggle__option[data-active] {
+  background: var(--surface-raised);
+  color: var(--ink);
+  font-weight: 600;
+}
+.view-toggle__option:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.view-toggle__option:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+/* ── Day View: Mon–Sun header strip ────────────────────────────────────── */
+.day-strip {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  min-width: 0;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+}
+.day-strip__tab {
+  position: relative;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 5px 10px 6px;
+  border-left: 1px solid var(--line-soft);
+  color: var(--ink-mute);
+  text-align: left;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+.day-strip__tab:first-child {
+  border-left: none;
+}
+.day-strip__tab:hover {
+  background: color-mix(in srgb, var(--ground) 70%, transparent);
+  color: var(--ink);
+}
+/* Selection is a rule under the tab, so nothing reflows when it moves. */
+.day-strip__tab::after {
+  content: "";
+  position: absolute;
+  inset: auto 0 -1px 0;
+  height: 2px;
+  background: transparent;
+}
+.day-strip__tab[data-selected] {
+  background: var(--surface-raised);
+  color: var(--ink);
+}
+.day-strip__tab[data-selected]::after {
+  background: var(--accent);
+}
+.day-strip__tab:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.day-strip__weekday {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.day-strip__tab[data-today] .day-strip__weekday {
+  color: var(--accent);
+}
+.day-strip__date {
+  font-size: 10.5px;
+  color: var(--ink-faint);
+}
+.day-strip__tab[data-selected] .day-strip__date {
+  color: var(--ink-mute);
+}
+.day-strip__count {
+  margin-left: auto;
+  font-size: 10.5px;
+  color: var(--ink-faint);
+}
+.day-strip__issue {
+  flex: none;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--warn);
+  align-self: center;
+}
+.day-strip__tab[data-issue="overlap"] .day-strip__issue {
+  background: var(--danger);
+}
+
+/* ── Pay strip: scroll inside footer, never widen the page ─────────────── */
+.pay-strip {
+  flex: none;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+/* ── Day View: resource timeline ───────────────────────────────────────── */
+.day-timeline {
+  --day-teacher-w: 136px;
+  --day-head-h: 38px;
+  min-width: 0;
+  background: var(--ground);
+}
+.day-timeline__head {
+  display: flex;
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  height: var(--day-head-h);
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+}
+.day-timeline__corner {
+  flex: none;
+  display: flex;
+  align-items: center;
+  width: var(--day-teacher-w);
+  padding: 0 10px;
+  border-right: 1px solid var(--line);
+}
+.day-timeline__times {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+.day-timeline__tick {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 0;
+  border-left: 1px solid var(--line-soft);
+}
+.day-timeline__tick--major {
+  border-left-color: var(--line);
+}
+.day-timeline__tick-label {
+  position: absolute;
+  bottom: 5px;
+  left: 4px;
+  font-size: 10px;
+  color: var(--ink-mute);
+  white-space: nowrap;
+}
+
+.day-timeline__row {
+  display: flex;
+  border-bottom: 1px solid var(--line-soft);
+}
+.day-timeline__teacher {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 1px;
+  width: var(--day-teacher-w);
+  padding: 0 10px;
+  border-right: 1px solid var(--line);
+  background: var(--surface);
+  overflow: hidden;
+}
+.day-timeline__teacher-code {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--ink);
+}
+.day-timeline__teacher-name,
+.day-timeline__teacher-count {
+  font-size: 10px;
+  color: var(--ink-faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.day-timeline__track {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  background: var(--surface-raised);
+}
+
+/* Hourly rules carry the eye; the half hours barely whisper. */
+.day-timeline__rule {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 0;
+  border-left: 1px solid color-mix(in srgb, var(--line-soft) 45%, transparent);
+}
+.day-timeline__rule--major {
+  border-left-color: var(--line-soft);
+}
+.day-timeline__now,
+.day-timeline__now-head {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 0;
+  border-left: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
+}
+.day-timeline__free {
+  position: absolute;
+  top: 50%;
+  left: 10px;
+  transform: translateY(-50%);
+  font-size: 10.5px;
+  color: var(--ink-faint);
+}
+.day-timeline__vacant {
+  padding: 32px 16px;
+  font-size: 12px;
+  color: var(--ink-faint);
+}
+
+/* ── Day View: lesson block ────────────────────────────────────────────── */
+.day-lesson {
+  position: absolute;
+  display: flex;
+  align-items: stretch;
+  min-width: 6px;
+  border: 1px solid var(--lc-border);
+  border-radius: 6px;
+  background: var(--lc-surface);
+  overflow: hidden;
+  cursor: pointer;
+  outline: none;
+  /* Only paint changes on state, so focus can never shift the timeline. */
+  transition: box-shadow 0.15s ease, opacity 0.15s ease;
+}
+.day-lesson:hover {
+  box-shadow: var(--lc-elev-hover);
+  z-index: 3;
+}
+.day-lesson[data-past] {
+  opacity: 0.68;
+}
+/* Too narrow for any text: the school colour floods the block so a short
+ * lesson still reads as a deliberate mark rather than an empty card. */
+.day-lesson[data-tier="bare"] {
+  background: color-mix(in srgb, var(--lc-accent) 22%, var(--lc-surface));
+}
+.day-lesson[data-dragging] {
+  opacity: 0.32;
+}
+.day-lesson[data-selected] {
+  box-shadow: 0 0 0 2px var(--accent);
+  z-index: 4;
+}
+.day-lesson[data-focused] {
+  box-shadow: 0 0 0 2px var(--danger);
+  z-index: 5;
+}
+.day-lesson[data-focused][data-travel]:not([data-conflict]) {
+  box-shadow: 0 0 0 2px var(--warn);
+}
+.day-lesson[data-selected][data-focused] {
+  box-shadow: 0 0 0 2px var(--danger), 0 0 0 4px var(--accent-soft);
+}
+.day-lesson:focus-visible {
+  box-shadow: 0 0 0 2px var(--surface-raised), 0 0 0 4px var(--accent);
+  z-index: 6;
+}
+.day-lesson[data-conflict] {
+  background: color-mix(in srgb, var(--danger-soft) 45%, var(--lc-surface));
+  border-color: color-mix(in srgb, var(--danger) 40%, var(--lc-border));
+}
+.day-lesson[data-travel]:not([data-conflict]) {
+  background: color-mix(in srgb, var(--warn-soft) 35%, var(--lc-surface));
+  border-color: color-mix(in srgb, var(--warn) 35%, var(--lc-border));
+}
+
+/* The rail is the school signal; a conflict restripes it, so the warning
+ * survives without colour vision. */
+.day-lesson__rail {
+  flex: none;
+  width: 3px;
+  background: var(--lc-accent);
+}
+.day-lesson[data-conflict] .day-lesson__rail {
+  background: repeating-linear-gradient(
+    135deg,
+    var(--danger) 0 3px,
+    color-mix(in srgb, var(--danger) 35%, transparent) 3px 6px
+  );
+}
+.day-lesson[data-travel]:not([data-conflict]) .day-lesson__rail {
+  background: repeating-linear-gradient(
+    135deg,
+    var(--warn) 0 3px,
+    color-mix(in srgb, var(--warn) 35%, transparent) 3px 6px
+  );
+}
+
+.day-lesson__body {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 1px;
+  min-width: 0;
+  padding: 0 6px;
+  overflow: hidden;
+}
+.day-lesson__top {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+.day-lesson__time {
+  flex: none;
+  font-size: 10.5px;
+  color: var(--lc-text-muted);
+}
+.day-lesson__status {
+  font-size: 9.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.day-lesson__status--conflict {
+  color: var(--danger);
+}
+.day-lesson__status--travel {
+  color: var(--warn);
+}
+.day-lesson__class {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--lc-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.day-lesson__flag {
+  flex: none;
+  font-size: 11px;
+  font-weight: 700;
+}
+.day-lesson__flag--conflict {
+  color: var(--danger);
+}
+.day-lesson__flag--travel {
+  color: var(--warn);
+}
+.day-lesson__where {
+  font-size: 10px;
+  line-height: 1.2;
+  color: var(--lc-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Day View: travel between campuses ─────────────────────────────────── */
+.day-timeline__travel {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 3px;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--line-soft) 55%, transparent);
+  border: 1px dashed color-mix(in srgb, var(--ink-faint) 45%, transparent);
+  overflow: hidden;
+}
+.day-timeline__travel[data-tight] {
+  background: color-mix(in srgb, var(--warn-soft) 70%, transparent);
+  border-style: dashed;
+  border-color: color-mix(in srgb, var(--warn) 55%, transparent);
+}
+.day-timeline__travel-label {
+  font-size: 9.5px;
+  color: var(--ink-mute);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 0 4px;
+}
+.day-timeline__travel[data-tight] .day-timeline__travel-label {
+  color: var(--warn);
+  font-weight: 600;
+}
+
+/* ── Day View: drag ghost ──────────────────────────────────────────────── */
+.day-timeline__ghost {
+  position: absolute;
+  z-index: 7;
+  display: flex;
+  align-items: center;
+  min-width: 6px;
+  border-radius: 6px;
+  border: 1px dashed var(--accent);
+  background: color-mix(in srgb, var(--accent-soft) 55%, transparent);
+  pointer-events: none;
+}
+.day-timeline__ghost[data-warning="conflict"] {
+  border-color: var(--danger);
+  background: color-mix(in srgb, var(--danger-soft) 60%, transparent);
+}
+.day-timeline__ghost[data-warning="travel"] {
+  border-color: var(--warn);
+  background: color-mix(in srgb, var(--warn-soft) 65%, transparent);
+}
+.day-timeline__ghost-label {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 4px);
+  padding: 1px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--line);
+  background: var(--surface-raised);
+  box-shadow: var(--card-shadow);
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--ink);
+  white-space: nowrap;
+}
+.day-timeline__ghost[data-warning="conflict"] .day-timeline__ghost-label {
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 50%, var(--line));
+}
+.day-timeline__ghost[data-warning="travel"] .day-timeline__ghost-label {
+  color: var(--warn);
+  border-color: color-mix(in srgb, var(--warn) 50%, var(--line));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .day-lesson,
+  .day-strip__tab,
+  .view-toggle__option {
+    transition-duration: 0.01ms !important;
+  }
 }

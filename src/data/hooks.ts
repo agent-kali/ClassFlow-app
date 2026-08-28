@@ -43,10 +43,18 @@ export function useLastPayEffect(): PayEffect | null {
 export function useLessonMutations() {
   const createLesson = useClassFlowStore((s) => s.createLesson);
   const updateLesson = useClassFlowStore((s) => s.updateLesson);
+  const editLesson = useClassFlowStore((s) => s.editLesson);
   const setLessonStatus = useClassFlowStore((s) => s.setLessonStatus);
   const rescheduleLesson = useClassFlowStore((s) => s.rescheduleLesson);
   const importLessons = useClassFlowStore((s) => s.importLessons);
-  return { createLesson, updateLesson, setLessonStatus, rescheduleLesson, importLessons };
+  return {
+    createLesson,
+    updateLesson,
+    editLesson,
+    setLessonStatus,
+    rescheduleLesson,
+    importLessons,
+  };
 }
 
 /** Joined lookup maps, memoized against the underlying lists. */

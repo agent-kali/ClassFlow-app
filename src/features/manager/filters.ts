@@ -30,13 +30,31 @@ export function useScheduleFilters() {
     });
   };
 
+  const setTeacherIds = (ids: Iterable<string>) =>
+    setFilters((f) => ({ ...f, teacherIds: new Set(ids) }));
+
+  /**
+   * Widen an active filter just enough to keep something visible — used when
+   * jumping to a conflict. An empty set already shows everything, and the
+   * manager's other narrowing is never thrown away.
+   */
+  const ensureIncluded = (key: keyof ScheduleFilters, ids: string[]) => {
+    if (ids.length === 0) return;
+    setFilters((f) => {
+      if (f[key].size === 0) return f;
+      const next = new Set(f[key]);
+      for (const id of ids) next.add(id);
+      return { ...f, [key]: next };
+    });
+  };
+
   const clear = () =>
     setFilters({ schoolIds: new Set(), campusIds: new Set(), teacherIds: new Set() });
 
   const isActive =
     filters.schoolIds.size > 0 || filters.campusIds.size > 0 || filters.teacherIds.size > 0;
 
-  return { filters, toggle, clear, isActive };
+  return { filters, toggle, setTeacherIds, ensureIncluded, clear, isActive };
 }
 
 export function useFilteredLessons(

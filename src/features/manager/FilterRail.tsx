@@ -15,6 +15,7 @@ function shortName(name: string): string {
 interface Props {
   filters: ScheduleFilters;
   toggle: (key: keyof ScheduleFilters, id: string) => void;
+  setTeacherIds: (ids: Iterable<string>) => void;
   clear: () => void;
   isActive: boolean;
   /** Below md the rail is a drawer, toggled from the toolbar. */
@@ -26,10 +27,23 @@ interface Props {
  * The narrowing rail. Nothing is required: the default view is everything,
  * and each chip subtracts. Selected chips carry the school's hue.
  */
-export function FilterRail({ filters, toggle, clear, isActive, mobileOpen, onMobileClose }: Props) {
+export function FilterRail({
+  filters,
+  toggle,
+  setTeacherIds,
+  clear,
+  isActive,
+  mobileOpen,
+  onMobileClose,
+}: Props) {
   const schools = useSchools();
   const campuses = useCampuses();
   const teachers = useTeachers();
+  const hasTeacherSelection = filters.teacherIds.size > 0;
+  const allTeachersSelected =
+    teachers.length > 0 &&
+    filters.teacherIds.size === teachers.length &&
+    teachers.every((teacher) => filters.teacherIds.has(teacher.id));
 
   return (
     <>
@@ -114,9 +128,21 @@ export function FilterRail({ filters, toggle, clear, isActive, mobileOpen, onMob
       </div>
 
       <div>
-        <h2 className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-ink-mute">
-          Teachers
-        </h2>
+        <div className="mb-1.5 flex items-baseline justify-between">
+          <h2 className="text-[11px] font-semibold uppercase tracking-wide text-ink-mute">
+            Teachers
+          </h2>
+          <button
+            type="button"
+            onClick={() =>
+              setTeacherIds(hasTeacherSelection ? [] : teachers.map((teacher) => teacher.id))
+            }
+            disabled={teachers.length === 0}
+            className="text-[11px] text-accent hover:underline disabled:cursor-not-allowed disabled:text-ink-faint disabled:no-underline"
+          >
+            {hasTeacherSelection ? "Clear" : "Select all"}
+          </button>
+        </div>
         <ul className="flex flex-col gap-0.5">
           {teachers.map((teacher) => {
             const on = filters.teacherIds.has(teacher.id);
@@ -127,7 +153,11 @@ export function FilterRail({ filters, toggle, clear, isActive, mobileOpen, onMob
                   onClick={() => toggle("teacherIds", teacher.id)}
                   aria-pressed={on}
                   className={`flex w-full items-baseline gap-2 rounded px-1.5 py-1 text-left text-[13px] transition-colors ${
-                    on ? "bg-accent-soft font-semibold text-accent" : "hover:bg-line-soft"
+                    on
+                      ? allTeachersSelected
+                        ? "bg-line-soft font-medium"
+                        : "bg-accent-soft font-semibold text-accent"
+                      : "hover:bg-line-soft"
                   }`}
                 >
                   <span className="cf-mono shrink-0 font-semibold">{teacher.code}</span>

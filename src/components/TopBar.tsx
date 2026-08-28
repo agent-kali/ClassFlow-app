@@ -16,7 +16,7 @@ export function TopBar() {
       <Link
         href={href}
         data-tour={tourId}
-        className={`rounded px-2.5 py-1 text-[13px] font-medium transition-colors ${
+        className={`rounded px-2 py-1 text-[12px] font-medium transition-colors sm:px-2.5 sm:text-[13px] ${
           active
             ? "bg-accent text-accent-ink"
             : "text-ink-mute hover:bg-line-soft hover:text-ink"
@@ -29,15 +29,15 @@ export function TopBar() {
   };
 
   return (
-    <header className="flex items-center gap-4 border-b border-line bg-surface px-4 py-2">
-      <Link href="/" className="flex items-baseline gap-1.5">
-        <span className="text-[15px] font-bold tracking-tight">ClassFlow</span>
+    <header className="flex min-w-0 items-center gap-2 border-b border-line bg-surface px-3 py-2 sm:gap-4 sm:px-4">
+      <Link href="/" className="flex shrink-0 items-baseline gap-1.5">
+        <span className="text-[14px] font-bold tracking-tight sm:text-[15px]">ClassFlow</span>
       </Link>
-      <nav className="flex items-center gap-1" aria-label="View">
+      <nav className="flex min-w-0 items-center gap-0.5 sm:gap-1" aria-label="View">
         {tab("/manager", "Schedule")}
         {tab("/teacher", "Teacher view", "teacher-nav")}
       </nav>
-      <div className="ml-auto flex items-center gap-3">
+      <div className="ml-auto flex shrink-0 items-center gap-2 sm:gap-3">
         <span
           className="cf-mono hidden text-[11px] text-ink-mute sm:inline"
           title={`Bank spot rate captured ${fxRate.capturedOn} (${fxRate.source})`}

@@ -1,209 +1,129 @@
 "use client";
 
-import { forwardRef } from "react";
+import type { CSSProperties } from "react";
 import type { Lesson } from "@/domain/types";
 import type { Conflict } from "@/domain/conflicts";
-import { useLookups } from "@/data/hooks";
-import { formatMin, formatRange } from "@/domain/time";
-import { Badge, schoolClass } from "@/components/Badge";
-import { LANE_EDGE_PX } from "./laneLayout";
-
-/** Single source of truth for vertical time scale (gutter, gridlines, events). */
-export const PX_PER_MIN = 1.5;
+import type { useLookups } from "@/data/hooks";
+import { formatAgendaMin } from "@/domain/time";
+import { accentForSchool, hasOverlapConflict, isLessonPast } from "./lessonCardModel";
 
 interface Props {
   lesson: Lesson;
-  lane: number;
-  laneCount: number;
-  /** Map a minute-of-day to Y within the day column. */
-  minuteToY: (min: number) => number;
-  /** Pixel height of a [start, end) minute range on the scale. */
-  rangeHeight: (startMin: number, endMin: number) => number;
   conflicts: Conflict[];
   lookups: ReturnType<typeof useLookups>;
-  selected?: boolean;
-  /** Pulse outline when this card is part of a focused travel gap. */
+  today: string;
+  nowMin: number | null;
+  isSelected: boolean;
   travelHighlighted?: boolean;
-  /** Guided-tour spotlight target. */
+  travelGapKey?: string;
+  conflictHighlighted?: boolean;
+  conflictFocusNonce?: number;
   tourTarget?: boolean;
+  isDragging?: boolean;
   onSelect?: (lesson: Lesson, el: HTMLElement) => void;
+  onDragStart?: (lesson: Lesson, e: React.PointerEvent<HTMLElement>) => void;
 }
 
-/**
- * Equal-width lanes packed flush inside a day column.
- * card_width = (column − edge insets) / laneCount; x = lane × card_width.
- */
-export function laneStyle(lane: number, laneCount: number): { left: string; width: string } {
-  const edge = LANE_EDGE_PX;
-  if (laneCount <= 1) {
-    return { left: `${edge}px`, width: `calc(100% - ${2 * edge}px)` };
-  }
-  const usable = `100% - ${2 * edge}px`;
-  const width = `calc((${usable}) / ${laneCount})`;
-  const left = `calc(${edge}px + ${lane} * (${usable}) / ${laneCount})`;
-  return { left, width };
-}
-
-function lessonTooltip(parts: {
-  code?: string;
-  range: string;
-  teacher?: string;
-  room?: string;
-  cmName?: string;
-  curriculum: string;
-  status?: string;
-}): string {
-  const head = [parts.code, parts.range].filter(Boolean).join(" ");
-  const mid = [parts.teacher, parts.room, parts.cmName ? `+${parts.cmName}` : null]
-    .filter(Boolean)
-    .join(" · ");
-  return [head, mid, parts.curriculum, parts.status].filter(Boolean).join(" — ");
-}
-
-/**
- * A lesson on the ruler. Vertical geometry comes from the time scale;
- * horizontal geometry from lane layout.
- *
- * Content is tiered and size-adaptive (see `.cf-lesson` in globals.css):
- * T1 always (code + start), then teacher → room → curriculum, dropped
- * whole tiers bottom-up. Never ellipsizes time or teacher codes.
- */
-export const LessonBlock = forwardRef<HTMLButtonElement, Props>(function LessonBlock(
-  {
-    lesson,
-    lane,
-    laneCount,
-    minuteToY,
-    rangeHeight,
-    conflicts,
-    lookups,
-    selected,
-    travelHighlighted = false,
-    tourTarget = false,
-    onSelect,
-  },
-  ref
-) {
+export function LessonBlock({
+  lesson,
+  conflicts,
+  lookups,
+  today,
+  nowMin,
+  isSelected,
+  travelHighlighted = false,
+  travelGapKey,
+  conflictHighlighted = false,
+  conflictFocusNonce = 0,
+  tourTarget = false,
+  isDragging = false,
+  onSelect,
+  onDragStart,
+}: Props) {
   const school = lookups.schoolOfRoom(lesson.roomId);
   const room = lookups.roomsById.get(lesson.roomId);
+  const campus = lookups.campusOfRoom(lesson.roomId);
   const group = lookups.classGroupsById.get(lesson.classGroupId);
   const teacher = lookups.teachersById.get(lesson.teacherId);
 
-  const top = minuteToY(lesson.startMin);
-  const height = rangeHeight(lesson.startMin, lesson.endMin);
-  const { left, width } = laneStyle(lane, laneCount);
-  const multiLane = laneCount > 1;
-
   const isOff = lesson.status !== "scheduled";
-  const hasOverlap = conflicts.some((c) => c.type === "overlap");
-  const hasTravel = conflicts.some((c) => c.type === "travel");
+  const isPast = isLessonPast(lesson, today, nowMin) || isOff;
+  const hasConflict = !isOff && hasOverlapConflict(conflicts);
+  const travelConflict = !isOff ? conflicts.find((c) => c.type === "travel") : undefined;
 
-  const startLabel = formatMin(lesson.startMin);
-  const rangeLabel = formatRange(lesson.startMin, lesson.endMin);
-  const title = lessonTooltip({
-    code: group?.code,
-    range: rangeLabel,
-    teacher: teacher?.code,
-    room: room?.name,
-    cmName: lesson.cmName,
-    curriculum: lesson.curriculum,
-    status: isOff ? lesson.status : undefined,
-  });
+  const teacherCode = (teacher?.code ?? "?").slice(0, 3).toUpperCase();
+  const classCode = group?.code ?? "Lesson";
+  const location = [campus?.name ?? school?.shortName, room?.name].filter(Boolean).join(" · ");
+  const timeLabel = `${formatAgendaMin(lesson.startMin)} — ${formatAgendaMin(lesson.endMin)}`;
+
+  const accent = accentForSchool(school?.color, isOff, isPast && !isOff);
+
+  const label =
+    `${classCode}, ${timeLabel}, ${teacherCode}${location ? `, ${location}` : ""}` +
+    (hasConflict ? ", conflict — double booking" : "") +
+    (travelConflict ? ", tight travel" : "") +
+    (isPast ? ", completed" : "") +
+    (isSelected ? ", selected" : "");
+
+  const statusKind = hasConflict ? "conflict" : travelConflict ? "travel" : null;
+  const statusText = hasConflict
+    ? "Double booking"
+    : travelConflict
+      ? `Tight travel (${travelConflict.gapMin} min)`
+      : null;
 
   return (
-    <button
-      ref={ref}
-      type="button"
-      title={title}
-      onClick={(e) => onSelect?.(lesson, e.currentTarget)}
+    <div
+      className={`lesson-card ${travelHighlighted ? "lesson-card--travel-focus" : ""} ${conflictHighlighted ? "lesson-card--conflict-focus" : ""} ${isDragging ? "lesson-card--dragging" : ""}`}
+      style={{ "--lc-accent": accent } as CSSProperties}
+      data-past={isPast || undefined}
+      data-conflict={hasConflict || undefined}
+      data-travel={travelConflict ? true : undefined}
+      data-selected={isSelected}
       data-lesson-id={lesson.id}
+      data-travel-gap={travelGapKey}
       data-tour={tourTarget ? "lesson-edit" : undefined}
-      data-lane={lane}
-      data-selected={selected || undefined}
-      data-conflict={hasOverlap || undefined}
-      data-cancelled={isOff || undefined}
-      className={`cf-lesson cf-card ${schoolClass(school)} group absolute overflow-hidden rounded-sm text-left ${
-        multiLane ? "cf-lesson--lanes" : ""
-      } ${travelHighlighted ? "cf-travel-pulse z-10 ring-2 ring-warn" : ""}`}
-      data-lane-count={laneCount}
-      style={{
-        top,
-        height: Math.max(height, 18),
-        left,
-        width,
-        minWidth: 0,
-        borderLeft: hasOverlap
-          ? undefined
-          : `3px solid ${isOff ? "var(--line)" : "var(--school)"}`,
+      tabIndex={0}
+      role="button"
+      aria-label={label}
+      onPointerDown={(e) => {
+        if (e.button !== 0) return;
+        onDragStart?.(lesson, e);
       }}
-      aria-label={`${group?.code ?? "Lesson"} ${rangeLabel}${isOff ? `, ${lesson.status}` : ""}`}
+      onClick={(e) => {
+        if (isDragging) return;
+        onSelect?.(lesson, e.currentTarget);
+      }}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onSelect?.(lesson, e.currentTarget);
+        }
+      }}
     >
-      <div className="cf-lesson__body">
-        {/* T1 — always: course code + start time (complete tokens only) */}
-        <div className="cf-lesson__t1">
-          <span
-            className={`cf-lesson__code cf-mono font-semibold ${isOff ? "text-ink-faint line-through decoration-danger/60" : ""}`}
-            style={isOff ? undefined : { color: "var(--school)" }}
-          >
-            {group?.code}
-          </span>
-          <span
-            className={`cf-lesson__time cf-card__time cf-mono ${isOff ? "text-ink-faint" : "text-ink-mute"}`}
-          >
-            {startLabel}
-          </span>
-          {hasTravel && !isOff && (
-            <Badge
-              size="xs"
-              tone="conflict"
-              className="cf-lesson__flag"
-              title="Tight travel gap to the next campus"
-            >
-              travel
-            </Badge>
-          )}
-          {hasOverlap && !isOff && !hasTravel && (
-            <Badge size="xs" tone="conflict" className="cf-lesson__flag" title="Double-booked">
-              conflict
-            </Badge>
-          )}
-          {isOff && (
-            <Badge size="xs" tone="cancelled" className="cf-lesson__flag">
-              {lesson.status === "cancelled" ? "cancelled" : "no-show"}
-            </Badge>
-          )}
-        </div>
-
-        {/* T2 — teacher code; dropped whole when it won't fit */}
-        {teacher?.code && (
-          <div className={`cf-lesson__t2 cf-mono font-medium ${isOff ? "text-ink-faint" : "text-ink"}`}>
-            {teacher.code}
-          </div>
+      <div className="lesson-card__surface">
+        {conflictHighlighted && conflictFocusNonce > 0 && (
+          <span key={conflictFocusNonce} className="lesson-card__focus-pulse" aria-hidden />
         )}
-
-        {/* T3 — room badge (+ CM when present); never mid-token ellipsis */}
-        {room?.name && (
-          <div className="cf-lesson__t3">
-            <Badge
-              size="xs"
-              tone="room"
-              className={`cf-lesson__room ${isOff ? "bg-transparent! text-ink-faint" : ""}`}
-            >
-              {room.name}
-            </Badge>
-            {lesson.cmName && (
-              <span className={`cf-lesson__cm cf-mono ${isOff ? "text-ink-faint" : "text-ink-mute"}`}>
-                +{lesson.cmName}
-              </span>
-            )}
+        {statusKind && <div className={`lesson-card__accent lesson-card__accent--${statusKind}`} />}
+        <div className="lesson-card__body">
+          <div className="lesson-card__time cf-mono">
+            <span className="lesson-card__time-start">{formatAgendaMin(lesson.startMin)}</span>
+            <span className="lesson-card__time-sep"> — </span>
+            <span className="lesson-card__time-end">{formatAgendaMin(lesson.endMin)}</span>
           </div>
-        )}
-
-        {/* T4 — program / material line */}
-        <div className={`cf-lesson__t4 ${isOff ? "text-ink-faint" : "text-ink-mute"}`}>
-          {lesson.curriculum}
+          <div className="lesson-card__meta">
+            <span className="lesson-card__teacher cf-mono">{teacherCode}</span>
+            <span className="lesson-card__class">{classCode}</span>
+          </div>
+          {location && <div className="lesson-card__location">{location}</div>}
+          {statusText && (
+            <div className={`lesson-card__status lesson-card__status--${statusKind}`}>
+              {statusText}
+            </div>
+          )}
         </div>
       </div>
-    </button>
+    </div>
   );
-});
+}

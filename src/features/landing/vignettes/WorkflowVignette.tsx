@@ -18,7 +18,7 @@ export function WorkflowVignette({ copy }: { copy: LandingCopy }) {
       body: (
         <div className="space-y-1.5">
           <div className="cf-mono border border-dashed border-line bg-ground px-2 py-1.5 text-[10px] text-ink-mute">
-            LLA_Week7_GVNN_v3.xlsx
+            OT_Week7_GVNN_v3.xlsx
           </div>
           <div className="cf-mono text-[10px] text-ink-faint">4 rows · 9 columns</div>
         </div>

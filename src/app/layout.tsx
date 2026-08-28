@@ -32,7 +32,7 @@ export default function RootLayout({
       className={`${plexSans.variable} ${plexMono.variable} h-full antialiased`}
       suppressHydrationWarning
     >
-      <body className="min-h-full flex flex-col bg-ground text-ink">
+      <body className="min-h-full flex flex-col overflow-x-hidden bg-ground text-ink">
         <script dangerouslySetInnerHTML={{ __html: themeInit }} />
         {children}
       </body>

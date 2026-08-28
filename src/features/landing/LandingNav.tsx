@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useId, useState } from "react";
-import type { LandingCopy } from "./copy";
+import { landingCopy, type LandingCopy } from "./copy";
 import { demoHref, type Locale } from "./locale";
 
 const LINKS = [
@@ -11,6 +11,24 @@ const LINKS = [
   { href: "#teacher", key: "teacher" as const },
   { href: "#architecture", key: "architecture" as const },
 ];
+
+/** Keep CTA / menu labels sized to the longer locale so the lang toggle doesn't shift. */
+function StableLabel({ current, candidates }: { current: string; candidates: string[] }) {
+  return (
+    <span className="grid justify-items-center *:col-start-1 *:row-start-1">
+      {candidates.map((label) => (
+        <span key={label} className="invisible whitespace-nowrap" aria-hidden>
+          {label}
+        </span>
+      ))}
+      <span className="whitespace-nowrap">{current}</span>
+    </span>
+  );
+}
+
+const DEMO_CTA_LABELS = [landingCopy.en.nav.exploreDemo, landingCopy.vi.nav.exploreDemo];
+const OPEN_MENU_LABELS = [landingCopy.en.nav.openMenu, landingCopy.vi.nav.openMenu];
+const CLOSE_MENU_LABELS = [landingCopy.en.nav.closeMenu, landingCopy.vi.nav.closeMenu];
 
 export function LandingNav({
   copy,
@@ -49,7 +67,7 @@ export function LandingNav({
           ClassFlow
         </a>
 
-        <nav className="ml-2 hidden items-center gap-1 md:flex" aria-label="Landing">
+        <nav className="ml-2 hidden min-w-0 flex-1 items-center gap-1 md:flex" aria-label="Landing">
           {LINKS.map((link) => (
             <a
               key={link.href}
@@ -61,11 +79,11 @@ export function LandingNav({
           ))}
         </nav>
 
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto flex shrink-0 items-center gap-2 md:ml-0">
           <div
             role="group"
             aria-label={copy.nav.langGroup}
-            className="flex overflow-hidden rounded border border-line"
+            className="flex shrink-0 overflow-hidden rounded border border-line"
           >
             {(["en", "vi"] as const).map((code) => (
               <button
@@ -73,7 +91,7 @@ export function LandingNav({
                 type="button"
                 aria-pressed={locale === code}
                 onClick={() => onLocale(code)}
-                className={`cf-mono px-2 py-1 text-[11px] font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
+                className={`cf-mono w-8 shrink-0 py-1 text-center text-[11px] font-semibold tabular-nums transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
                   locale === code
                     ? "bg-accent text-accent-ink"
                     : "bg-surface text-ink-mute hover:text-ink"
@@ -88,7 +106,7 @@ export function LandingNav({
             href={demoHref(locale)}
             className="hidden rounded bg-accent px-3 py-1.5 text-[12px] font-semibold text-accent-ink transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent sm:inline-flex"
           >
-            {copy.nav.exploreDemo}
+            <StableLabel current={copy.nav.exploreDemo} candidates={DEMO_CTA_LABELS} />
           </Link>
 
           <button
@@ -98,7 +116,10 @@ export function LandingNav({
             aria-controls={menuId}
             onClick={() => setOpen((v) => !v)}
           >
-            {open ? copy.nav.closeMenu : copy.nav.openMenu}
+            <StableLabel
+              current={open ? copy.nav.closeMenu : copy.nav.openMenu}
+              candidates={open ? CLOSE_MENU_LABELS : OPEN_MENU_LABELS}
+            />
           </button>
         </div>
       </div>

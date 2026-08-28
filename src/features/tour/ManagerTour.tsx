@@ -10,6 +10,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { createPortal } from "react-dom";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   getLocaleSnapshot,
@@ -21,6 +22,8 @@ import { formatTourProgress, getTourCopy } from "./copy";
 
 const TARGETS = ["import", "lesson-edit", "teacher-nav"] as const;
 type TourTarget = (typeof TARGETS)[number];
+
+const TINT = "rgba(35,32,26,0.45)";
 
 interface AnchorRect {
   top: number;
@@ -35,8 +38,10 @@ function resolveTourLocale(langParam: string | null): Locale {
 
 export function ManagerTour({
   onOpenImport,
+  onStepChange,
 }: {
   onOpenImport?: () => void;
+  onStepChange?: (step: number) => void;
 }) {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -120,6 +125,36 @@ export function ManagerTour({
     return () => window.removeEventListener("keydown", onKey);
   }, [showing, clearTourParam]);
 
+  useEffect(() => {
+    if (!showing) return;
+    onStepChange?.(step);
+  }, [showing, step, onStepChange]);
+
+  useEffect(() => {
+    if (!showing) return;
+    const allowTarget = (el: EventTarget | null): boolean => {
+      if (!(el instanceof Element)) return false;
+      if (panelRef.current?.contains(el)) return true;
+      if (el.closest("[data-tour-allowed]")) return true;
+      if (target !== "lesson-edit") return false;
+      const tourEl = document.querySelector('[data-tour="lesson-edit"]');
+      return !!tourEl && (tourEl === el || tourEl.contains(el));
+    };
+
+    const block = (e: Event) => {
+      if (allowTarget(e.target)) return;
+      e.preventDefault();
+      e.stopPropagation();
+    };
+
+    document.addEventListener("pointerdown", block, true);
+    document.addEventListener("click", block, true);
+    return () => {
+      document.removeEventListener("pointerdown", block, true);
+      document.removeEventListener("click", block, true);
+    };
+  }, [showing, target]);
+
   if (!showing) return null;
 
   const stepCopy = copy.steps[step];
@@ -135,20 +170,9 @@ export function ManagerTour({
 
   const panelStyle = positionPanel(highlight, target);
 
-  return (
+  return createPortal(
     <div className="pointer-events-none fixed inset-0 z-[80]" role="presentation">
-      {highlight && (
-        <div
-          aria-hidden
-          className="absolute rounded border-2 border-accent shadow-[0_0_0_9999px_rgba(35,32,26,0.45)] transition-all duration-200"
-          style={{
-            top: highlight.top,
-            left: highlight.left,
-            width: highlight.width,
-            height: highlight.height,
-          }}
-        />
-      )}
+      <TourBackdrop highlight={highlight} target={target} />
 
       <div
         ref={panelRef}
@@ -238,7 +262,58 @@ export function ManagerTour({
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
+  );
+}
+
+function TourBackdrop({
+  highlight,
+  target,
+}: {
+  highlight: { top: number; left: number; width: number; height: number } | null;
+  target: TourTarget;
+}) {
+  const panelClass = "pointer-events-auto fixed";
+  const bg = { backgroundColor: TINT };
+  const showHole = target === "lesson-edit" && highlight;
+
+  if (!showHole) {
+    return (
+      <>
+        <div aria-hidden className={`${panelClass} inset-0`} style={bg} />
+        {highlight && (
+          <div
+            aria-hidden
+            className="pointer-events-none fixed rounded border-2 border-accent transition-all duration-200"
+            style={{
+              top: highlight.top,
+              left: highlight.left,
+              width: highlight.width,
+              height: highlight.height,
+            }}
+          />
+        )}
+      </>
+    );
+  }
+
+  const { top, left, width, height } = highlight;
+  const right = left + width;
+  const bottom = top + height;
+
+  return (
+    <>
+      <div
+        aria-hidden
+        className="pointer-events-none fixed rounded border-2 border-accent transition-all duration-200"
+        style={{ top, left, width, height }}
+      />
+      <div className={panelClass} style={{ ...bg, top: 0, left: 0, right: 0, height: top }} />
+      <div className={panelClass} style={{ ...bg, top, left: 0, width: left, height }} />
+      <div className={panelClass} style={{ ...bg, top, left: right, right: 0, height }} />
+      <div className={panelClass} style={{ ...bg, top: bottom, left: 0, right: 0, bottom: 0 }} />
+    </>
   );
 }
 

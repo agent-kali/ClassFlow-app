@@ -27,23 +27,24 @@ export function PayStrip({ anchorDate }: { anchorDate?: string }) {
 
   return (
     <footer
-      className="flex items-stretch gap-0 overflow-x-auto border-t border-line bg-surface"
+      className="pay-strip border-t border-line bg-surface"
       aria-label="This week's pay by teacher"
     >
-      <div className="flex shrink-0 flex-col justify-center border-r border-line px-3 py-1.5">
-        <span className="text-[10px] font-semibold uppercase tracking-wide text-ink-mute">
-          Pay, week of {format(parseISO(days[0]), "d MMM")}
-        </span>
-        <span className="text-[10px] text-ink-faint">delivered hours only</span>
-      </div>
-      {teachers.map((t) => {
-        const e = earningsFor(t, lessons, range);
-        const flash = effect && effect.teacherId === t.id;
-        return (
-          <div
-            key={t.id}
-            className="relative flex min-w-32 shrink-0 items-center gap-2.5 border-r border-line-soft px-3 py-1.5"
-          >
+      <div className="flex min-w-0 items-stretch gap-0 overflow-x-auto">
+        <div className="flex shrink-0 flex-col justify-center border-r border-line px-3 py-1.5">
+          <span className="text-[10px] font-semibold uppercase tracking-wide text-ink-mute">
+            Pay, week of {format(parseISO(days[0]), "d MMM")}
+          </span>
+          <span className="text-[10px] text-ink-faint">delivered hours only</span>
+        </div>
+        {teachers.map((t) => {
+          const e = earningsFor(t, lessons, range);
+          const flash = effect && effect.teacherId === t.id;
+          return (
+            <div
+              key={t.id}
+              className="relative flex min-w-28 shrink-0 items-center gap-2 border-r border-line-soft px-2.5 py-1.5 sm:min-w-32 sm:gap-2.5 sm:px-3"
+            >
             {flash && (
               // Keyed per effect so the pulse re-triggers on every edit.
               <span key={`bg-${effect.id}`} className="cf-pulse pointer-events-none absolute inset-0" />
@@ -66,9 +67,10 @@ export function PayStrip({ anchorDate }: { anchorDate?: string }) {
                 {formatUsd(Math.abs(effect.deltaUsd))}
               </span>
             )}
-          </div>
-        );
-      })}
+            </div>
+          );
+        })}
+      </div>
     </footer>
   );
 }

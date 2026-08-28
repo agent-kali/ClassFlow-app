@@ -5,34 +5,22 @@ import { format, parseISO } from "date-fns";
 import type { Lesson } from "@/domain/types";
 import type { Conflict } from "@/domain/conflicts";
 import type { useLookups } from "@/data/hooks";
-import { formatMin, nowMinOn, weekDates } from "@/domain/time";
-import { layoutDay } from "./laneLayout";
+import { nowMinOn, weekDates } from "@/domain/time";
 import { LessonBlock } from "./LessonBlock";
-import { TravelGapChip } from "./TravelGapChip";
+import { TOUR_BLOCK_ALL_LESSONS } from "@/features/tour/lessonLock";
+import { resolveTourLessonId } from "@/features/tour/tourLesson";
 import {
-  AXIS_PADDING_PX,
-  createTimeScale,
-  defaultAnchorMin,
-  findEmptySpans,
-  tagLessonsWithDayIndex,
-} from "./timeViewport";
+  periodDividerLabel,
+  periodOf,
+  sortLessonsChronologically,
+} from "./lessonCardModel";
+import { travelGapKey, type TravelConflict } from "./travelGap";
 
-const GUTTER_PX = 52;
-/** Separate track for empty-span labels — never overlaps hour ticks. */
-const GAP_TRACK_PX = 40;
-const STICKY_HEADER_PX = 44;
-
-export type TravelConflict = Extract<Conflict, { type: "travel" }>;
-
-export function travelGapKey(c: Pick<TravelConflict, "lessonIds">): string {
-  return `${c.lessonIds[0]}|${c.lessonIds[1]}`;
-}
+const DRAG_THRESHOLD_PX = 8;
+const NARROW_BREAKPOINT = 768;
 
 interface Props {
   lessons: Lesson[];
-  /** Unfiltered lessons, used to keep the time axis stable while filtering. */
-  allLessons: Lesson[];
-  /** Monday-anchored date of the week being viewed. */
   anchorDate: string;
   today: string;
   lookups: ReturnType<typeof useLookups>;
@@ -41,11 +29,14 @@ interface Props {
   focusedTravelKey?: string | null;
   travelFocusNonce?: number;
   onFocusTravelGap?: (key: string) => void;
+  focusedOverlapKey?: string | null;
+  overlapFocusNonce?: number;
+  focusLessonId?: string | null;
+  onConflictFocused?: (lessonId: string, el: HTMLElement | null) => void;
   selectedLessonId?: string | null;
+  lockLessonSelection?: string | null;
   onSelectLesson?: (lesson: Lesson, el: HTMLElement) => void;
-  /** Drag-to-create on empty ruler space (already snapped). */
-  onCreateRange?: (date: string, startMin: number, endMin: number) => void;
-  snap?: (min: number) => number;
+  onMoveLesson?: (id: string, date: string, startMin: number, endMin: number) => void;
 }
 
 function useNowMinute(): Date {
@@ -57,22 +48,88 @@ function useNowMinute(): Date {
   return now;
 }
 
-interface DragState {
-  date: string;
-  anchorMin: number;
-  currentMin: number;
+function useIsNarrow(): boolean {
+  const [narrow, setNarrow] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia(`(max-width: ${NARROW_BREAKPOINT - 1}px)`);
+    const fn = () => setNarrow(mq.matches);
+    fn();
+    mq.addEventListener("change", fn);
+    return () => mq.removeEventListener("change", fn);
+  }, []);
+  return narrow;
 }
 
-function campusShort(name: string | undefined): string {
-  if (!name) return "?";
-  const parts = name.split(/\s+/);
-  if (parts.length >= 2) return parts.map((p) => p[0]).join("").slice(0, 3).toUpperCase();
-  return name.slice(0, 3).toUpperCase();
+interface DragState {
+  lesson: Lesson;
+  pointerId: number;
+  startX: number;
+  startY: number;
+  activated: boolean;
+}
+
+interface DropTarget {
+  date: string;
+  insertIndex: number;
+}
+
+type DayRow =
+  | { kind: "period"; label: "AFTERNOON" | "EVENING" }
+  | { kind: "lesson"; lesson: Lesson; lessonIndex: number };
+
+function buildDayRows(dayLessons: Lesson[]): DayRow[] {
+  const sorted = sortLessonsChronologically(dayLessons);
+  const rows: DayRow[] = [];
+  let lastPeriod: ReturnType<typeof periodOf> | null = null;
+  let lessonIndex = 0;
+
+  for (const lesson of sorted) {
+    const current = periodOf(lesson.startMin);
+    const divider = periodDividerLabel(current);
+    if (divider && current !== lastPeriod) {
+      rows.push({ kind: "period", label: divider });
+    }
+    lastPeriod = current;
+    rows.push({ kind: "lesson", lesson, lessonIndex });
+    lessonIndex += 1;
+  }
+
+  return rows;
+}
+
+function findDropTarget(
+  clientX: number,
+  clientY: number,
+  days: string[],
+  dayColRefs: (HTMLDivElement | null)[],
+  stackRefs: Map<string, HTMLDivElement | null>
+): DropTarget | null {
+  for (let dayIndex = 0; dayIndex < days.length; dayIndex++) {
+    const col = dayColRefs[dayIndex];
+    if (!col) continue;
+    const rect = col.getBoundingClientRect();
+    if (clientX < rect.left || clientX > rect.right) continue;
+
+    const date = days[dayIndex];
+    const stack = stackRefs.get(date);
+    if (!stack) return { date, insertIndex: 0 };
+
+    const cards = Array.from(stack.querySelectorAll<HTMLElement>("[data-lesson-id]"));
+    if (cards.length === 0) return { date, insertIndex: 0 };
+
+    for (let i = 0; i < cards.length; i++) {
+      const cardRect = cards[i].getBoundingClientRect();
+      const midY = cardRect.top + cardRect.height / 2;
+      if (clientY < midY) return { date, insertIndex: i };
+    }
+
+    return { date, insertIndex: cards.length };
+  }
+  return null;
 }
 
 export function WeekTimeline({
   lessons,
-  allLessons,
   anchorDate,
   today,
   lookups,
@@ -80,82 +137,74 @@ export function WeekTimeline({
   travelConflicts = [],
   focusedTravelKey = null,
   travelFocusNonce = 0,
-  onFocusTravelGap,
-  selectedLessonId,
+  focusedOverlapKey = null,
+  overlapFocusNonce = 0,
+  focusLessonId = null,
+  onConflictFocused,
+  selectedLessonId = null,
+  lockLessonSelection = null,
   onSelectLesson,
-  onCreateRange,
-  snap = (m) => m,
+  onMoveLesson,
 }: Props) {
   const days = useMemo(() => weekDates(parseISO(anchorDate)), [anchorDate]);
   const now = useNowMinute();
+  const isNarrow = useIsNarrow();
+  const [mobileDayIndex, setMobileDayIndex] = useState(() => {
+    const idx = days.indexOf(today);
+    return idx >= 0 ? idx : 0;
+  });
+
   const [drag, setDrag] = useState<DragState | null>(null);
+  const [dropTarget, setDropTarget] = useState<DropTarget | null>(null);
+  const dropTargetRef = useRef<DropTarget | null>(null);
   const scrollerRef = useRef<HTMLDivElement>(null);
-  const anchoredWeekRef = useRef<string | null>(null);
+  const dayColRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const stackRefs = useRef<Map<string, HTMLDivElement | null>>(new Map());
+  const suppressClickRef = useRef(false);
+  const onConflictFocusedRef = useRef(onConflictFocused);
+  onConflictFocusedRef.current = onConflictFocused;
+  const lessonsRef = useRef(lessons);
+  lessonsRef.current = lessons;
 
-  /** Stable guided-tour target: first scheduled LP12B01B @ 18:00 in the visible week. */
-  const tourLessonId = useMemo(() => {
-    const daySet = new Set(days);
-    const candidates = lessons
-      .filter((l) => {
-        if (!daySet.has(l.date) || l.status !== "scheduled" || l.startMin !== 18 * 60) {
-          return false;
-        }
-        return lookups.classGroupsById.get(l.classGroupId)?.code === "LP12B01B";
-      })
-      .sort((a, b) => a.date.localeCompare(b.date) || a.startMin - b.startMin);
-    return candidates[0]?.id ?? null;
-  }, [days, lessons, lookups]);
+  const tourLessonId = useMemo(
+    () =>
+      resolveTourLessonId(lessons, days, (id) => lookups.classGroupsById.get(id)?.code),
+    [days, lessons, lookups]
+  );
 
-  const [topMin, bottomMin] = useMemo(() => {
-    let min = 9 * 60;
-    let max = 18 * 60;
-    for (const l of allLessons) {
-      min = Math.min(min, l.startMin);
-      max = Math.max(max, l.endMin);
+  const travelGapByLesson = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const c of travelConflicts) {
+      const key = travelGapKey(c);
+      map.set(c.lessonIds[0], key);
+      map.set(c.lessonIds[1], key);
     }
-    return [Math.floor((min - 20) / 60) * 60, Math.ceil((max + 20) / 60) * 60];
-  }, [allLessons]);
-
-  const emptySpans = useMemo(() => {
-    const tagged = tagLessonsWithDayIndex(allLessons, days);
-    return findEmptySpans(topMin, bottomMin, tagged, days.length);
-  }, [allLessons, days, topMin, bottomMin]);
-
-  const scale = useMemo(() => createTimeScale(topMin, bottomMin), [topMin, bottomMin]);
-
-  const hours = useMemo(() => {
-    const list: number[] = [];
-    for (let m = Math.ceil(topMin / 60) * 60; m <= bottomMin; m += 60) list.push(m);
-    return list;
-  }, [topMin, bottomMin]);
+    return map;
+  }, [travelConflicts]);
 
   const byDay = useMemo(() => {
-    const map = new Map<string, ReturnType<typeof layoutDay>>();
+    const map = new Map<string, DayRow[]>();
     for (const date of days) {
-      map.set(date, layoutDay(lessons.filter((l) => l.date === date)));
+      const dayLessons = lessons.filter((l) => l.date === date);
+      map.set(date, buildDayRows(dayLessons));
     }
     return map;
   }, [lessons, days]);
 
-  const lessonsById = useMemo(() => {
-    const map = new Map<string, Lesson>();
-    for (const l of lessons) map.set(l.id, l);
+  const lessonCountByDay = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const [date, rows] of byDay) {
+      map.set(date, rows.filter((r) => r.kind === "lesson").length);
+    }
     return map;
-  }, [lessons]);
+  }, [byDay]);
 
   const nowMin = nowMinOn(today, now);
 
   useEffect(() => {
-    if (anchoredWeekRef.current === anchorDate) return;
-    const el = scrollerRef.current;
-    if (!el) return;
-    anchoredWeekRef.current = anchorDate;
-
-    const anchor = defaultAnchorMin(allLessons, topMin, bottomMin, nowMin);
-    const anchorY = scale.minuteToY(anchor);
-    const viewportLead = STICKY_HEADER_PX + AXIS_PADDING_PX + 16;
-    el.scrollTop = Math.max(0, anchorY - viewportLead);
-  }, [anchorDate, allLessons, topMin, bottomMin, nowMin, scale]);
+    const idx = days.indexOf(today);
+    if (idx >= 0) setMobileDayIndex(idx);
+  }, [anchorDate, days, today]);
 
   useEffect(() => {
     if (!focusedTravelKey || travelFocusNonce === 0) return;
@@ -166,13 +215,27 @@ export function WeekTimeline({
       el?.scrollIntoView({ block: "center", behavior: "smooth" });
     });
     return () => cancelAnimationFrame(t);
-  }, [focusedTravelKey, travelFocusNonce, scale.totalPx]);
+  }, [focusedTravelKey, travelFocusNonce]);
 
-  const minFromPointer = (e: React.PointerEvent, el: HTMLElement): number => {
-    const rect = el.getBoundingClientRect();
-    const min = scale.yToMinute(e.clientY - rect.top);
-    return Math.max(topMin, Math.min(bottomMin, snap(min)));
-  };
+  useEffect(() => {
+    if (!focusLessonId || overlapFocusNonce === 0) return;
+
+    const focused = lessonsRef.current.find((l) => l.id === focusLessonId);
+    const dayIdx = focused ? days.indexOf(focused.date) : -1;
+    if (isNarrow && dayIdx >= 0 && dayIdx !== mobileDayIndex) {
+      setMobileDayIndex(dayIdx);
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      const el = scrollerRef.current?.querySelector(
+        `[data-lesson-id="${CSS.escape(focusLessonId)}"]`
+      ) as HTMLElement | null;
+      el?.scrollIntoView({ block: "center", inline: "nearest", behavior: "auto" });
+      onConflictFocusedRef.current?.(focusLessonId, el);
+    }, 50);
+    return () => clearTimeout(timer);
+  }, [focusLessonId, overlapFocusNonce, mobileDayIndex, isNarrow, days]);
 
   const focusedLessonIds = useMemo(() => {
     if (!focusedTravelKey) return null;
@@ -180,223 +243,237 @@ export function WeekTimeline({
     return new Set([a, b]);
   }, [focusedTravelKey]);
 
-  const gridCols = `${GUTTER_PX}px ${GAP_TRACK_PX}px repeat(7, minmax(0, 1fr))`;
+  const focusedOverlapIds = useMemo(() => {
+    if (!focusedOverlapKey) return null;
+    const [a, b] = focusedOverlapKey.split("|");
+    return new Set([a, b]);
+  }, [focusedOverlapKey]);
+
+  const visibleDays = isNarrow ? [days[mobileDayIndex] ?? days[0]] : days;
+
+  const handleSelect = onSelectLesson
+    ? (lesson: Lesson, el: HTMLElement) => {
+        if (suppressClickRef.current) return;
+        if (lockLessonSelection === TOUR_BLOCK_ALL_LESSONS) return;
+        if (lockLessonSelection && lesson.id !== lockLessonSelection) return;
+        onSelectLesson(lesson, el);
+      }
+    : undefined;
+
+  const finishDrag = (target: DropTarget | null, activeDrag: DragState | null) => {
+    if (activeDrag && target && onMoveLesson) {
+      const { lesson } = activeDrag;
+      if (target.date !== lesson.date) {
+        onMoveLesson(lesson.id, target.date, lesson.startMin, lesson.endMin);
+        suppressClickRef.current = true;
+        requestAnimationFrame(() => {
+          suppressClickRef.current = false;
+        });
+      }
+    }
+    setDrag(null);
+    setDropTarget(null);
+    dropTargetRef.current = null;
+  };
+
+  useEffect(() => {
+    if (!drag) return;
+
+    const activeDrag = drag;
+
+    const onMove = (e: PointerEvent) => {
+      if (e.pointerId !== activeDrag.pointerId) return;
+      const dx = e.clientX - activeDrag.startX;
+      const dy = e.clientY - activeDrag.startY;
+      const dist = Math.hypot(dx, dy);
+
+      if (!activeDrag.activated && dist >= DRAG_THRESHOLD_PX) {
+        setDrag({ ...activeDrag, activated: true });
+      }
+
+      if (dist >= DRAG_THRESHOLD_PX || activeDrag.activated) {
+        const target = findDropTarget(
+          e.clientX,
+          e.clientY,
+          days,
+          dayColRefs.current,
+          stackRefs.current
+        );
+        dropTargetRef.current = target;
+        setDropTarget(target);
+      }
+    };
+
+    const onUp = (e: PointerEvent) => {
+      if (e.pointerId !== activeDrag.pointerId) return;
+      const current = activeDrag.activated ? activeDrag : null;
+      finishDrag(dropTargetRef.current, current);
+    };
+
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
+    return () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+    };
+  }, [drag, days, onMoveLesson]);
+
+  const renderDayColumn = (date: string, dayIndex: number) => {
+    const rows = byDay.get(date) ?? [];
+    const lessonCount = lessonCountByDay.get(date) ?? 0;
+    const isToday = date === today;
+    const isDropColumn = dropTarget?.date === date;
+
+    return (
+      <div
+        key={date}
+        ref={(el) => {
+          dayColRefs.current[dayIndex] = el;
+        }}
+        className={`week-agenda__day ${isToday ? "week-agenda__day--today" : ""}`}
+      >
+        <div
+          ref={(el) => {
+            stackRefs.current.set(date, el);
+          }}
+          className="week-agenda__stack"
+        >
+          {lessonCount === 0 && (
+            <div className="week-agenda__empty" aria-hidden={!!drag}>
+              No lessons
+            </div>
+          )}
+
+          {rows.map((row) => {
+            if (row.kind === "period") {
+              return (
+                <div key={`${date}-${row.label}`} className="week-agenda__period" aria-hidden>
+                  <span className="week-agenda__period-label">{row.label}</span>
+                </div>
+              );
+            }
+
+            const { lesson, lessonIndex } = row;
+            const conflicts = conflictsByLesson.get(lesson.id) ?? [];
+            const gapKey = travelGapByLesson.get(lesson.id);
+            const showInsertBefore =
+              isDropColumn && dropTarget?.insertIndex === lessonIndex && drag?.activated;
+
+            return (
+              <div key={lesson.id}>
+                {showInsertBefore && <div className="week-agenda__insert" aria-hidden />}
+                <LessonBlock
+                  lesson={lesson}
+                  conflicts={conflicts}
+                  lookups={lookups}
+                  today={today}
+                  nowMin={nowMin}
+                  isSelected={selectedLessonId === lesson.id}
+                  travelHighlighted={focusedLessonIds?.has(lesson.id) ?? false}
+                  travelGapKey={gapKey}
+                  conflictHighlighted={focusedOverlapIds?.has(lesson.id) ?? false}
+                  conflictFocusNonce={focusLessonId === lesson.id ? overlapFocusNonce : 0}
+                  tourTarget={lesson.id === tourLessonId}
+                  isDragging={drag?.activated && drag.lesson.id === lesson.id}
+                  onSelect={handleSelect}
+                  onDragStart={
+                    onMoveLesson
+                      ? (l, e) => {
+                          e.currentTarget.setPointerCapture(e.pointerId);
+                          setDrag({
+                            lesson: l,
+                            pointerId: e.pointerId,
+                            startX: e.clientX,
+                            startY: e.clientY,
+                            activated: false,
+                          });
+                        }
+                      : undefined
+                  }
+                />
+              </div>
+            );
+          })}
+
+          {isDropColumn &&
+            dropTarget &&
+            dropTarget.insertIndex >= lessonCount &&
+            drag?.activated && <div className="week-agenda__insert" aria-hidden />}
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div
       ref={scrollerRef}
-      className="flex-1 overflow-auto"
+      className="week-agenda flex-1 overflow-auto"
       role="region"
       aria-label="Week schedule"
+      data-overlap-focus={focusedOverlapKey ?? undefined}
     >
-      <div className="min-w-[880px]">
-        {/* Day header */}
-        <div
-          className="sticky top-0 z-20 grid border-b border-line bg-surface"
-          style={{ gridTemplateColumns: gridCols }}
-        >
-          <div />
-          <div className="border-l border-line-soft" />
-          {days.map((date) => {
-            const isToday = date === today;
-            const d = parseISO(date);
-            return (
-              <div
-                key={date}
-                className={`border-l border-line-soft px-2 py-1.5 ${isToday ? "bg-accent-soft" : ""}`}
-              >
-                <span className={`cf-mono text-[11px] font-semibold uppercase ${isToday ? "text-accent" : "text-ink-mute"}`}>
-                  {format(d, "EEE")}
-                </span>
-                <span className={`cf-mono ml-1.5 text-[11px] ${isToday ? "text-accent" : "text-ink-faint"}`}>
-                  {format(d, "dd/MM")}
-                </span>
-              </div>
-            );
-          })}
-        </div>
-
-        {/* Ruler body */}
-        <div className="grid" style={{ gridTemplateColumns: gridCols }}>
-          {/* Hour gutter — tick labels only */}
-          <div className="relative" style={{ height: scale.totalPx }}>
-            {hours.map((m) => (
-              <span
-                key={m}
-                className="cf-mono pointer-events-none absolute right-1.5 -translate-y-1/2 text-[10px] leading-none text-ink-faint"
-                style={{ top: scale.minuteToY(m) }}
-              >
-                {formatMin(m)}
-              </span>
-            ))}
+      <div className="week-agenda__board">
+        {isNarrow ? (
+          <div className="week-agenda__mobile-nav" role="tablist" aria-label="Day">
+            {days.map((date, i) => {
+              const d = parseISO(date);
+              const isToday = date === today;
+              const isActive = i === mobileDayIndex;
+              const count = lessonCountByDay.get(date) ?? 0;
+              return (
+                <button
+                  key={date}
+                  type="button"
+                  role="tab"
+                  aria-selected={isActive}
+                  className={`week-agenda__day-tab ${isActive ? "week-agenda__day-tab--active" : ""} ${isToday ? "week-agenda__day-tab--today" : ""}`}
+                  onClick={() => setMobileDayIndex(i)}
+                >
+                  <span className="cf-mono text-[11px] font-semibold uppercase">
+                    {format(d, "EEE")}
+                  </span>
+                  <span className="cf-mono text-[10px]">{format(d, "dd/MM")}</span>
+                  {count > 0 && <span className="week-agenda__day-count">{count}</span>}
+                </button>
+              );
+            })}
           </div>
-
-          {/* Empty-span track — de-emphasis labels, separate from hour ticks */}
-          <div className="relative border-l border-line-soft" style={{ height: scale.totalPx }}>
-            {emptySpans.map((span) => (
-              <div
-                key={`${span.startMin}-${span.endMin}`}
-                className="pointer-events-none absolute inset-x-0 flex items-center justify-center px-0.5"
-                style={{
-                  top: scale.minuteToY(span.startMin),
-                  height: scale.rangeHeight(span.startMin, span.endMin),
-                }}
-              >
-                <span className="cf-mono text-center text-[8px] leading-tight font-medium text-ink-faint">
-                  {formatMin(span.startMin)}
-                  <span className="block">–</span>
-                  {formatMin(span.endMin)}
-                </span>
-              </div>
-            ))}
-          </div>
-
-          {days.map((date) => {
-            const dayLayout = byDay.get(date) ?? [];
-            const isToday = date === today;
-            const dayDrag = drag?.date === date ? drag : null;
-            const dayTravel = travelConflicts.filter((c) => {
-              const prev = lessonsById.get(c.lessonIds[0]);
-              return prev?.date === date;
-            });
-
-            return (
-              <div
-                key={date}
-                className={`relative overflow-x-clip border-l border-line-soft ${isToday ? "bg-accent-soft/30" : ""}`}
-                style={{ height: scale.totalPx, touchAction: onCreateRange ? "pan-x" : undefined }}
-                onPointerDown={
-                  onCreateRange
-                    ? (e) => {
-                        if (e.target !== e.currentTarget || e.button !== 0) return;
-                        const min = minFromPointer(e, e.currentTarget);
-                        e.currentTarget.setPointerCapture(e.pointerId);
-                        setDrag({ date, anchorMin: min, currentMin: min });
-                      }
-                    : undefined
-                }
-                onPointerMove={
-                  onCreateRange
-                    ? (e) => {
-                        if (!dayDrag) return;
-                        const min = minFromPointer(e, e.currentTarget);
-                        setDrag({ ...dayDrag, currentMin: min });
-                      }
-                    : undefined
-                }
-                onPointerUp={
-                  onCreateRange
-                    ? () => {
-                        if (!dayDrag) return;
-                        const start = Math.min(dayDrag.anchorMin, dayDrag.currentMin);
-                        let end = Math.max(dayDrag.anchorMin, dayDrag.currentMin);
-                        if (end - start < 15) end = start + 60;
-                        setDrag(null);
-                        onCreateRange(date, start, end);
-                      }
-                    : undefined
-                }
-                onPointerCancel={onCreateRange ? () => setDrag(null) : undefined}
-              >
-                {hours.map((m) => (
-                  <div
-                    key={m}
-                    className="pointer-events-none absolute inset-x-0 border-t border-line-soft"
-                    style={{ top: scale.minuteToY(m) }}
-                  />
-                ))}
-
-                {emptySpans.map((span) => (
-                  <div
-                    key={`${span.startMin}-${span.endMin}`}
-                    className="pointer-events-none absolute inset-x-0 bg-ground/60"
-                    style={{
-                      top: scale.minuteToY(span.startMin),
-                      height: scale.rangeHeight(span.startMin, span.endMin),
-                    }}
-                    aria-hidden
-                  />
-                ))}
-
-                {dayDrag && dayDrag.currentMin !== dayDrag.anchorMin && (
-                  <div
-                    className="pointer-events-none absolute inset-x-0.5 z-10 rounded-sm border border-accent bg-accent-soft/70"
-                    style={{
-                      top: scale.minuteToY(Math.min(dayDrag.anchorMin, dayDrag.currentMin)),
-                      height: scale.rangeHeight(
-                        Math.min(dayDrag.anchorMin, dayDrag.currentMin),
-                        Math.max(dayDrag.anchorMin, dayDrag.currentMin)
-                      ),
-                    }}
+        ) : (
+          <div className="week-agenda__header">
+            {days.map((date) => {
+              const isToday = date === today;
+              const d = parseISO(date);
+              const count = lessonCountByDay.get(date) ?? 0;
+              return (
+                <div
+                  key={date}
+                  className={`week-agenda__header-cell ${isToday ? "week-agenda__header-cell--today" : ""}`}
+                >
+                  <span
+                    className={`cf-mono text-[11px] font-semibold uppercase ${isToday ? "text-accent" : "text-ink-mute"}`}
                   >
-                    <span className="cf-mono px-1 text-[10px] font-semibold text-accent">
-                      {formatMin(Math.min(dayDrag.anchorMin, dayDrag.currentMin))}–
-                      {formatMin(Math.max(dayDrag.anchorMin, dayDrag.currentMin))}
-                    </span>
-                  </div>
-                )}
-
-                {isToday &&
-                  nowMin !== null &&
-                  nowMin >= topMin &&
-                  nowMin <= bottomMin && (
-                    <div
-                      className="pointer-events-none absolute inset-x-0 z-10"
-                      style={{ top: scale.minuteToY(nowMin) }}
-                    >
-                      <div className="border-t-2 border-accent" />
-                      <span className="cf-mono absolute -top-2 left-0.5 rounded-sm bg-accent px-1 text-[9px] font-bold text-accent-ink">
-                        {formatMin(nowMin)}
-                      </span>
-                    </div>
+                    {format(d, "EEE")}
+                  </span>
+                  <span
+                    className={`cf-mono ml-1.5 text-[11px] ${isToday ? "text-accent" : "text-ink-faint"}`}
+                  >
+                    {format(d, "dd/MM")}
+                  </span>
+                  {count > 0 && (
+                    <span className="cf-mono ml-1 text-[10px] text-ink-faint">{count}</span>
                   )}
+                </div>
+              );
+            })}
+          </div>
+        )}
 
-                {dayLayout.map(({ lesson, lane, laneCount }) => (
-                  <LessonBlock
-                    key={`${lesson.id}-${
-                      focusedLessonIds?.has(lesson.id) ? travelFocusNonce : 0
-                    }`}
-                    lesson={lesson}
-                    lane={lane}
-                    laneCount={laneCount}
-                    minuteToY={scale.minuteToY}
-                    rangeHeight={scale.rangeHeight}
-                    conflicts={conflictsByLesson.get(lesson.id) ?? []}
-                    lookups={lookups}
-                    selected={selectedLessonId === lesson.id}
-                    travelHighlighted={focusedLessonIds?.has(lesson.id) ?? false}
-                    tourTarget={lesson.id === tourLessonId}
-                    onSelect={onSelectLesson}
-                  />
-                ))}
-
-                {dayTravel.map((c) => {
-                  const prev = lessonsById.get(c.lessonIds[0]);
-                  const next = lessonsById.get(c.lessonIds[1]);
-                  if (!prev || !next) return null;
-                  const fromCampus = lookups.campusOfRoom(prev.roomId);
-                  const toCampus = lookups.campusOfRoom(next.roomId);
-                  const teacher = lookups.teachersById.get(c.teacherId);
-                  const key = travelGapKey(c);
-                  return (
-                    <TravelGapChip
-                      key={`${key}-${focusedTravelKey === key ? travelFocusNonce : 0}`}
-                      gapKey={key}
-                      gapMin={c.gapMin}
-                      gapStartMin={prev.endMin}
-                      gapEndMin={next.startMin}
-                      minuteToY={scale.minuteToY}
-                      fromCampus={campusShort(fromCampus?.name)}
-                      toCampus={campusShort(toCampus?.name)}
-                      teacherCode={teacher?.code ?? "?"}
-                      highlighted={focusedTravelKey === key}
-                      onActivate={() => onFocusTravelGap?.(key)}
-                    />
-                  );
-                })}
-              </div>
-            );
-          })}
+        <div
+          className={`week-agenda__columns ${isNarrow ? "week-agenda__columns--single" : ""}`}
+        >
+          {visibleDays.map((date) => renderDayColumn(date, days.indexOf(date)))}
         </div>
       </div>
     </div>

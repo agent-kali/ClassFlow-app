@@ -2,15 +2,39 @@
 
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { addDays, format, parseISO } from "date-fns";
-import { Badge, badgeClassName } from "@/components/Badge";
 import { TopBar } from "@/components/TopBar";
 import { ClientOnly } from "@/components/ClientOnly";
-import { useConflicts, useLastPayEffect, useLessons, useLookups, useToday } from "@/data/hooks";
+import {
+  useConflicts,
+  useLastPayEffect,
+  useLessons,
+  useLookups,
+  useTeachers,
+  useToday,
+} from "@/data/hooks";
 import type { Lesson } from "@/domain/types";
 import { formatUsd } from "@/domain/money";
-import { mondayOf, snapMin, toIsoDate, weekDates } from "@/domain/time";
+import { mondayOf, toIsoDate, weekDates } from "@/domain/time";
+import { useLessonMutations } from "@/data/hooks";
 import { WeekTimeline } from "@/features/manager/WeekTimeline";
+import { DayTimeline } from "@/features/manager/DayTimeline";
+import { DayDateStrip } from "@/features/manager/DayDateStrip";
+import { ScheduleToolbar } from "@/features/manager/ScheduleToolbar";
+import { useIsNarrow } from "@/features/manager/useIsNarrow";
+import {
+  buildDayIssueMarkers,
+  resolveInitialDayDate,
+  resolveIssueNavigation,
+  shiftDay,
+  type ScheduleViewMode,
+} from "@/features/manager/dayViewState";
 import { travelGapKey, type TravelConflict } from "@/features/manager/travelGap";
+import {
+  earlierLessonId,
+  overlapKey,
+  type TeacherOverlap,
+} from "@/features/manager/overlap";
+import { isTeacherOverlap } from "@/domain/conflicts";
 import { FilterRail } from "@/features/manager/FilterRail";
 import { useFilteredLessons, useScheduleFilters } from "@/features/manager/filters";
 import { LessonPopover } from "@/features/manager/LessonPopover";
@@ -18,6 +42,9 @@ import { CreateLessonDialog, type CreatePrefill } from "@/features/manager/Creat
 import { ImportDialog } from "@/features/manager/ImportDialog";
 import { PayStrip } from "@/features/manager/PayStrip";
 import { ManagerTour } from "@/features/tour/ManagerTour";
+import { resolveTourLessonLock } from "@/features/tour/lessonLock";
+import { resolveTourLessonId } from "@/features/tour/tourLesson";
+import { useTourActive } from "@/features/tour/useTourActive";
 
 export default function ManagerPage() {
   return (
@@ -46,10 +73,13 @@ function ManagerScreen() {
   const lessons = useLessons();
   const today = useToday();
   const lookups = useLookups();
+  const teachers = useTeachers();
   const { conflicts, byLesson } = useConflicts();
-  const { filters, toggle, clear, isActive } = useScheduleFilters();
+  const { filters, toggle, setTeacherIds, ensureIncluded, clear, isActive } =
+    useScheduleFilters();
   const filtered = useFilteredLessons(lessons, filters, lookups);
   const payEffect = useLastPayEffect();
+  const { rescheduleLesson } = useLessonMutations();
 
   const [selection, setSelection] = useState<Selection | null>(null);
   const [editFlash, setEditFlash] = useState<EditFlash | null>(null);
@@ -63,18 +93,114 @@ function ManagerScreen() {
   /** Index into travelConflicts while cycling from the header pill; null until first click. */
   const [travelCursor, setTravelCursor] = useState<number | null>(null);
   const [travelFocusNonce, setTravelFocusNonce] = useState(0);
+  /** Index into overlapConflicts while cycling from the header pill; null until first click. */
+  const [overlapCursor, setOverlapCursor] = useState<number | null>(null);
+  const [overlapFocus, setOverlapFocus] = useState<{
+    key: string;
+    selectId: string;
+    nonce: number;
+  } | null>(null);
+  /** Set while jumping between a conflict pair so dismissing the old popover doesn't clear the highlight. */
+  const pendingConflictSelectRef = useRef<string | null>(null);
+  const [tourStep, setTourStep] = useState(0);
+  const tourActive = useTourActive();
+
+  const [viewMode, setViewMode] = useState<ScheduleViewMode>("week");
+  const [dayDate, setDayDate] = useState(today);
+  /** The lesson pair a conflict jump put under the manager's eye, and the day it lives on. */
+  const [dayFocus, setDayFocus] = useState<{
+    date: string;
+    lessonIds: string[];
+    nonce: number;
+  } | null>(null);
+  const isNarrow = useIsNarrow();
 
   const days = useMemo(() => weekDates(parseISO(anchorDate)), [anchorDate]);
+  const tourLessonId = useMemo(
+    () =>
+      resolveTourLessonId(filtered, days, (id) => lookups.classGroupsById.get(id)?.code),
+    [filtered, days, lookups]
+  );
+  const tourLessonLock = resolveTourLessonLock(tourActive, tourStep, tourLessonId);
+
+  useEffect(() => {
+    if (tourActive) {
+      setSelection(null);
+      setOverlapFocus(null);
+    }
+  }, [tourActive]);
+
   const weekLabel = `${format(parseISO(days[0]), "d MMM")} – ${format(parseISO(days[6]), "d MMM yyyy")}`;
+  const weekLabelCompact = `${format(parseISO(days[0]), "d")}–${format(parseISO(days[6]), "d MMM yyyy")}`;
   const isCurrentWeek = days.includes(today);
   const shiftWeek = (weeks: number) =>
     setAnchorDate(toIsoDate(addDays(mondayOf(parseISO(anchorDate)), weeks * 7)));
 
-  const overlapCount = conflicts.filter((c) => {
-    if (c.type !== "overlap") return false;
-    const a = lessons.find((l) => l.id === c.lessonIds[0]);
-    return a ? days.includes(a.date) : false;
-  }).length;
+  // The spatial timeline is a desktop instrument, and the guided tour walks
+  // the week agenda — either one keeps the schedule in Week View.
+  const canUseDayView = !isNarrow && !tourActive;
+  const mode: ScheduleViewMode = canUseDayView ? viewMode : "week";
+  const dayLabel = format(parseISO(dayDate), "EEE d MMM yyyy");
+  const dayLabelCompact = format(parseISO(dayDate), "EEE d MMM");
+  /** Focus belongs to the day it was set on, so changing date drops it. */
+  const activeDayFocus = dayFocus && dayFocus.date === dayDate ? dayFocus : null;
+
+  /** Keeps the anchored week — and so the pay strip — around the open day. */
+  const goToDay = (date: string) => {
+    setDayDate(date);
+    if (!days.includes(date)) setAnchorDate(date);
+  };
+
+  const stepBack = () => (mode === "day" ? goToDay(shiftDay(dayDate, -1)) : shiftWeek(-1));
+  const stepForward = () => (mode === "day" ? goToDay(shiftDay(dayDate, 1)) : shiftWeek(1));
+  const atNow = mode === "day" ? dayDate === today : isCurrentWeek;
+  const goToNow = () => (mode === "day" ? goToDay(today) : setAnchorDate(today));
+
+  const changeMode = (next: ScheduleViewMode) => {
+    if (next === viewMode) return;
+    if (next === "day") {
+      setDayDate(
+        resolveInitialDayDate({
+          highlightedDate: selection?.lesson.date ?? null,
+          today,
+          weekDays: days,
+        })
+      );
+    }
+    setViewMode(next);
+  };
+
+  /** Rows are every selected teacher — an empty row still says "available". */
+  const dayTeacherIds = useMemo(() => {
+    const ordered = [...teachers].sort((a, b) => a.code.localeCompare(b.code));
+    const selected = filters.teacherIds;
+    return (selected.size > 0 ? ordered.filter((t) => selected.has(t.id)) : ordered).map(
+      (t) => t.id
+    );
+  }, [teachers, filters.teacherIds]);
+
+  const dayMarkers = useMemo(
+    () => buildDayIssueMarkers(days, filtered, conflicts),
+    [days, filtered, conflicts]
+  );
+
+  const overlapConflicts = useMemo(() => {
+    const daySet = new Set(days);
+    return conflicts.filter((c): c is TeacherOverlap => {
+      if (!isTeacherOverlap(c)) return false;
+      const a = lessons.find((l) => l.id === c.lessonIds[0]);
+      return !!a && daySet.has(a.date);
+    });
+  }, [conflicts, lessons, days]);
+  const overlapCount = overlapConflicts.length;
+  const overlapKeys = useMemo(
+    () => overlapConflicts.map(overlapKey).join(","),
+    [overlapConflicts]
+  );
+  const lessonsById = useMemo(
+    () => new Map(lessons.map((l) => [l.id, l])),
+    [lessons]
+  );
 
   const travelConflicts = useMemo(() => {
     const daySet = new Set(days);
@@ -94,14 +220,53 @@ function ManagerScreen() {
       ? travelGapKey(travelConflicts[travelCursor])
       : null;
 
-  // Reset cycle when the set of travel gaps changes (edit / filter / week shift).
+  // Reset cycle when the set of travel gaps or double-bookings changes.
   useEffect(() => {
     setTravelCursor(null);
   }, [travelKeys, anchorDate]);
 
+  useEffect(() => {
+    setOverlapCursor(null);
+    setOverlapFocus(null);
+  }, [overlapKeys, anchorDate]);
+
+  /**
+   * The single route behind every "show me this problem" control: open Day
+   * View on the issue's date, make its teacher visible without discarding the
+   * manager's other filters, and leave a static ring on both lessons. On a
+   * phone, and during the tour, the week agenda keeps its own behaviour.
+   */
+  const navigateToIssue = (lessonIds: readonly string[]) => {
+    if (!canUseDayView) return false;
+    const pair = lessonIds
+      .map((id) => lessonsById.get(id))
+      .filter((l): l is Lesson => !!l);
+    const nav = resolveIssueNavigation(pair, filters, (lesson) => {
+      const campus = lookups.campusOfRoom(lesson.roomId);
+      return { campusId: campus?.id, schoolId: campus?.schoolId };
+    });
+    if (!nav) return false;
+
+    ensureIncluded("teacherIds", nav.widen.teacherIds);
+    ensureIncluded("campusIds", nav.widen.campusIds);
+    ensureIncluded("schoolIds", nav.widen.schoolIds);
+    setSelection(null);
+    setOverlapFocus(null);
+    setViewMode("day");
+    goToDay(nav.date);
+    setDayFocus({
+      date: nav.date,
+      lessonIds: nav.focusLessonIds,
+      nonce: (dayFocus?.nonce ?? 0) + 1,
+    });
+    return true;
+  };
+
   const focusTravelAt = (index: number) => {
     if (travelCount === 0) return;
-    setTravelCursor(((index % travelCount) + travelCount) % travelCount);
+    const next = ((index % travelCount) + travelCount) % travelCount;
+    setTravelCursor(next);
+    if (navigateToIssue(travelConflicts[next].lessonIds)) return;
     setTravelFocusNonce((n) => n + 1);
   };
 
@@ -119,6 +284,71 @@ function ManagerScreen() {
   const selectedLesson = selection
     ? lessons.find((l) => l.id === selection.lesson.id) ?? null
     : null;
+
+  const focusOverlap = (conflict: TeacherOverlap, selectId: string) => {
+    const idx = overlapConflicts.findIndex((c) => overlapKey(c) === overlapKey(conflict));
+    if (idx >= 0) setOverlapCursor(idx);
+    pendingConflictSelectRef.current = selectId;
+    setSelection(null);
+    setOverlapFocus({
+      key: overlapKey(conflict),
+      selectId,
+      nonce: (overlapFocus?.nonce ?? 0) + 1,
+    });
+  };
+
+  const cycleOverlap = () => {
+    if (overlapCount === 0) return;
+    const next = overlapCursor === null ? 0 : (overlapCursor + 1) % overlapCount;
+    const conflict = overlapConflicts[next];
+    setOverlapCursor(next);
+    if (navigateToIssue(conflict.lessonIds)) return;
+    focusOverlap(conflict, earlierLessonId(conflict, lessonsById));
+  };
+
+  const handleConflictFocused = (lessonId: string, el: HTMLElement | null) => {
+    pendingConflictSelectRef.current = null;
+    const lesson = lessonsById.get(lessonId);
+    if (!lesson) return;
+    const rect = el?.getBoundingClientRect();
+    setSelection({
+      lesson,
+      rect:
+        rect && rect.width > 0
+          ? rect
+          : new DOMRect(Math.max(24, window.innerWidth / 2 - 40), 140, 80, 72),
+    });
+  };
+
+  const dismissLessonDetails = () => {
+    setSelection(null);
+    if (!pendingConflictSelectRef.current) setOverlapFocus(null);
+  };
+
+  const selectLesson = (lesson: Lesson, el: HTMLElement) => {
+    pendingConflictSelectRef.current = null;
+    const related = overlapFocus && overlapFocus.key.split("|").includes(lesson.id);
+    if (!related) setOverlapFocus(null);
+    // Picking a lesson outside the focused pair is how the manager moves on.
+    if (dayFocus && !dayFocus.lessonIds.includes(lesson.id)) setDayFocus(null);
+    setSelection({ lesson, rect: el.getBoundingClientRect() });
+  };
+
+  const viewConflictingLesson = (otherId: string) => {
+    const currentId = selectedLesson?.id;
+    if (!currentId) return;
+    if (navigateToIssue([currentId, otherId])) return;
+    const conflict = overlapConflicts.find(
+      (c) =>
+        (c.lessonIds[0] === currentId && c.lessonIds[1] === otherId) ||
+        (c.lessonIds[1] === currentId && c.lessonIds[0] === otherId)
+    ) ?? {
+      type: "overlap" as const,
+      kind: "teacher" as const,
+      lessonIds: [currentId, otherId] as [string, string],
+    };
+    focusOverlap(conflict, otherId);
+  };
 
   // When an edit from the popover changes pay, float the delta at the block
   // the manager just acted on — the consequence lands where the eye already is.
@@ -143,138 +373,105 @@ function ManagerScreen() {
   }, [editFlash]);
 
   return (
-    <div className="flex h-dvh flex-col">
+    <div className="flex h-dvh min-w-0 flex-col overflow-x-hidden">
       <TopBar />
 
-      <div className="flex items-center gap-3 border-b border-line bg-surface px-4 py-1.5">
-        <div className="flex items-center gap-1">
-          <button
-            type="button"
-            onClick={() => shiftWeek(-1)}
-            aria-label="Previous week"
-            className="rounded border border-line px-1.5 py-0.5 text-[12px] text-ink-mute hover:border-ink-faint hover:text-ink"
-          >
-            &larr;
-          </button>
-          <button
-            type="button"
-            onClick={() => shiftWeek(1)}
-            aria-label="Next week"
-            className="rounded border border-line px-1.5 py-0.5 text-[12px] text-ink-mute hover:border-ink-faint hover:text-ink"
-          >
-            &rarr;
-          </button>
-          {!isCurrentWeek && (
-            <button
-              type="button"
-              onClick={() => setAnchorDate(today)}
-              className="rounded border border-line px-1.5 py-0.5 text-[11px] text-accent hover:border-accent"
-            >
-              This week
-            </button>
-          )}
-        </div>
-        <h1 className="cf-mono text-[13px] font-semibold">{weekLabel}</h1>
-        <div className="flex items-center gap-1.5">
-          {overlapCount > 0 && (
-            <Badge size="md" tone="count" countKind="danger">
-              {overlapCount} double-booking{overlapCount > 1 ? "s" : ""}
-            </Badge>
-          )}
-          {travelCount > 0 && (
-            <button
-              type="button"
-              onClick={cycleTravelGap}
-              className={badgeClassName({
-                size: "md",
-                tone: "count",
-                countKind: "warn",
-                className:
-                  "transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent",
-              })}
-              aria-label={
-                travelCount === 1
-                  ? "Show tight travel gap on the schedule"
-                  : travelCursor === null
-                    ? `Show first of ${travelCount} tight travel gaps`
-                    : `Show next tight travel gap, currently ${travelCursor + 1} of ${travelCount}`
-              }
-            >
-              {travelCount} tight travel gap{travelCount > 1 ? "s" : ""}
-              {travelCursor !== null && travelCount > 1
-                ? ` · ${travelCursor + 1}/${travelCount}`
-                : ""}
-            </button>
-          )}
-          {overlapCount === 0 && travelCount === 0 && (
-            <span className="cf-mono text-[11px] text-ink-faint">No conflicts</span>
-          )}
-        </div>
-        <div className="ml-auto flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setRailOpen(true)}
-            className="rounded border border-line px-2.5 py-1 text-[12px] font-medium hover:border-ink-faint md:hidden"
-          >
-            Filters
-          </button>
-          <button
-            type="button"
-            data-tour="import"
-            onClick={() => setImporting(true)}
-            className="rounded border border-line px-2.5 py-1 text-[12px] font-medium transition-colors hover:border-ink-faint"
-          >
-            Import a schedule
-          </button>
-          <button
-            type="button"
-            onClick={() => setCreatePrefill({})}
-            className="rounded bg-accent px-2.5 py-1 text-[12px] font-semibold text-accent-ink transition-opacity hover:opacity-90"
-          >
-            New lesson
-          </button>
-        </div>
-      </div>
+      <ScheduleToolbar
+        mode={mode}
+        titleFull={mode === "day" ? dayLabel : weekLabel}
+        titleCompact={mode === "day" ? dayLabelCompact : weekLabelCompact}
+        canUseDayView={canUseDayView}
+        onChangeMode={changeMode}
+        onStepBack={stepBack}
+        onStepForward={stepForward}
+        onGoToNow={goToNow}
+        atNow={atNow}
+        overlapCount={overlapCount}
+        overlapCursor={overlapCursor}
+        onCycleOverlap={cycleOverlap}
+        travelCount={travelCount}
+        travelCursor={travelCursor}
+        onCycleTravelGap={cycleTravelGap}
+        showClearFocus={mode === "day" && !!activeDayFocus}
+        onClearFocus={() => setDayFocus(null)}
+        onOpenFilters={() => setRailOpen(true)}
+        onOpenImport={() => setImporting(true)}
+        onNewLesson={() => setCreatePrefill({})}
+      />
 
-      <div className="flex min-h-0 flex-1">
+      <div className="flex min-h-0 min-w-0 flex-1">
         <FilterRail
           filters={filters}
           toggle={toggle}
+          setTeacherIds={setTeacherIds}
           clear={clear}
           isActive={isActive}
           mobileOpen={railOpen}
           onMobileClose={() => setRailOpen(false)}
         />
-        <WeekTimeline
-          lessons={filtered}
-          allLessons={lessons}
-          anchorDate={anchorDate}
-          today={today}
-          lookups={lookups}
-          conflictsByLesson={byLesson}
-          travelConflicts={travelConflicts}
-          focusedTravelKey={focusedTravelKey}
-          travelFocusNonce={travelFocusNonce}
-          onFocusTravelGap={focusTravelByKey}
-          selectedLessonId={selectedLesson?.id ?? null}
-          onSelectLesson={(lesson, el) =>
-            setSelection({ lesson, rect: el.getBoundingClientRect() })
-          }
-          onCreateRange={(date, startMin, endMin) =>
-            setCreatePrefill({ date, startMin, endMin })
-          }
-          snap={snapMin}
-        />
+        {mode === "day" ? (
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden">
+            <DayDateStrip
+              markers={dayMarkers}
+              selected={dayDate}
+              today={today}
+              onSelect={goToDay}
+            />
+            <DayTimeline
+              lessons={filtered}
+              date={dayDate}
+              today={today}
+              teacherIds={dayTeacherIds}
+              lookups={lookups}
+              conflictsByLesson={byLesson}
+              travelConflicts={travelConflicts}
+              focusedLessonIds={activeDayFocus?.lessonIds ?? null}
+              focusNonce={activeDayFocus?.nonce ?? 0}
+              selectedLessonId={selectedLesson?.id ?? null}
+              onSelectLesson={selectLesson}
+              onMoveLesson={(id, date, startMin, endMin) =>
+                rescheduleLesson(id, date, startMin, endMin)
+              }
+            />
+          </div>
+        ) : (
+          <WeekTimeline
+            lessons={filtered}
+            anchorDate={anchorDate}
+            today={today}
+            lookups={lookups}
+            conflictsByLesson={byLesson}
+            travelConflicts={travelConflicts}
+            focusedTravelKey={focusedTravelKey}
+            travelFocusNonce={travelFocusNonce}
+            onFocusTravelGap={focusTravelByKey}
+            focusedOverlapKey={overlapFocus?.key ?? null}
+            overlapFocusNonce={overlapFocus?.nonce ?? 0}
+            focusLessonId={overlapFocus?.selectId ?? null}
+            onConflictFocused={handleConflictFocused}
+            selectedLessonId={selectedLesson?.id ?? null}
+            lockLessonSelection={tourLessonLock}
+            onSelectLesson={selectLesson}
+            onMoveLesson={
+              tourActive
+                ? undefined
+                : (id, date, startMin, endMin) => rescheduleLesson(id, date, startMin, endMin)
+            }
+          />
+        )}
       </div>
 
       <PayStrip anchorDate={anchorDate} />
 
       {selectedLesson && selection && (
         <LessonPopover
+          key={selectedLesson.id}
           lesson={selectedLesson}
           anchorRect={selection.rect}
           weekOf={anchorDate}
-          onClose={() => setSelection(null)}
+          stackAboveTour={tourActive}
+          onClose={dismissLessonDetails}
+          onViewConflictingLesson={viewConflictingLesson}
           onAction={() => {
             pendingEditRect.current = selection.rect;
           }}
@@ -307,8 +504,13 @@ function ManagerScreen() {
           onClose={() => setCreatePrefill(null)}
         />
       )}
-      {importing && <ImportDialog onClose={() => setImporting(false)} />}
-      <ManagerTour onOpenImport={() => setImporting(true)} />
+      {importing && (
+        <ImportDialog stackAboveTour={tourActive} onClose={() => setImporting(false)} />
+      )}
+      <ManagerTour
+        onOpenImport={() => setImporting(true)}
+        onStepChange={setTourStep}
+      />
     </div>
   );
 }
