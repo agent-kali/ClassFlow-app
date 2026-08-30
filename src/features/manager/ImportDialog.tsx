@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { format, parseISO } from "date-fns";
 import { importSamples, type ImportSample } from "@/data/fixtures/importSamples";
-import { useLessonMutations, useLookups, useSchools, useToday } from "@/data/hooks";
+import { useLessonMutations, useLookups, useToday } from "@/data/hooks";
 import { formatRange } from "@/domain/time";
 import { SchoolChip } from "@/components/SchoolChip";
 
@@ -20,7 +20,6 @@ export function ImportDialog({
   onClose: () => void;
   stackAboveTour?: boolean;
 }) {
-  const schools = useSchools();
   const today = useToday();
   const lookups = useLookups();
   const { importLessons } = useLessonMutations();
