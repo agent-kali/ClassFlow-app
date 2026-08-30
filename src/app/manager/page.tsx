@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { addDays, format, parseISO } from "date-fns";
 import { TopBar } from "@/components/TopBar";
 import { ClientOnly } from "@/components/ClientOnly";
@@ -91,17 +91,25 @@ function ManagerScreen() {
   const [anchorDate, setAnchorDate] = useState(today);
   const [railOpen, setRailOpen] = useState(false);
   /** Index into travelConflicts while cycling from the header pill; null until first click. */
-  const [travelCursor, setTravelCursor] = useState<number | null>(null);
+  const [travelCycle, setTravelCycle] = useState<{
+    signature: string;
+    cursor: number | null;
+  }>({ signature: "", cursor: null });
   const [travelFocusNonce, setTravelFocusNonce] = useState(0);
   /** Index into overlapConflicts while cycling from the header pill; null until first click. */
-  const [overlapCursor, setOverlapCursor] = useState<number | null>(null);
-  const [overlapFocus, setOverlapFocus] = useState<{
+  const [overlapCursorState, setOverlapCursorState] = useState<{
+    signature: string;
+    index: number | null;
+  }>({ signature: "", index: null });
+  const [overlapFocusState, setOverlapFocusState] = useState<{
+    signature: string;
     key: string;
     selectId: string;
     nonce: number;
   } | null>(null);
   /** Set while jumping between a conflict pair so dismissing the old popover doesn't clear the highlight. */
   const pendingConflictSelectRef = useRef<string | null>(null);
+  const tourSessionClearedRef = useRef(false);
   const [tourStep, setTourStep] = useState(0);
   const tourActive = useTourActive();
 
@@ -124,11 +132,17 @@ function ManagerScreen() {
   const tourLessonLock = resolveTourLessonLock(tourActive, tourStep, tourLessonId);
 
   useEffect(() => {
-    if (tourActive) {
-      setSelection(null);
-      setOverlapFocus(null);
-    }
+    if (!tourActive) tourSessionClearedRef.current = false;
   }, [tourActive]);
+
+  const handleTourStepChange = useCallback((step: number) => {
+    if (!tourSessionClearedRef.current) {
+      tourSessionClearedRef.current = true;
+      setSelection(null);
+      setOverlapFocusState(null);
+    }
+    setTourStep(step);
+  }, []);
 
   const weekLabel = `${format(parseISO(days[0]), "d MMM")} – ${format(parseISO(days[6]), "d MMM yyyy")}`;
   const weekLabelCompact = `${format(parseISO(days[0]), "d")}–${format(parseISO(days[6]), "d MMM yyyy")}`;
@@ -197,6 +211,11 @@ function ManagerScreen() {
     () => overlapConflicts.map(overlapKey).join(","),
     [overlapConflicts]
   );
+  const overlapSignature = `${anchorDate}:${overlapKeys}`;
+  const overlapCursor =
+    overlapCursorState.signature === overlapSignature ? overlapCursorState.index : null;
+  const overlapFocus =
+    overlapFocusState?.signature === overlapSignature ? overlapFocusState : null;
   const lessonsById = useMemo(
     () => new Map(lessons.map((l) => [l.id, l])),
     [lessons]
@@ -215,20 +234,13 @@ function ManagerScreen() {
     () => travelConflicts.map(travelGapKey).join(","),
     [travelConflicts]
   );
+  const travelSignature = `${anchorDate}:${travelKeys}`;
+  const travelCursor =
+    travelCycle.signature === travelSignature ? travelCycle.cursor : null;
   const focusedTravelKey =
     travelCursor !== null && travelConflicts[travelCursor]
       ? travelGapKey(travelConflicts[travelCursor])
       : null;
-
-  // Reset cycle when the set of travel gaps or double-bookings changes.
-  useEffect(() => {
-    setTravelCursor(null);
-  }, [travelKeys, anchorDate]);
-
-  useEffect(() => {
-    setOverlapCursor(null);
-    setOverlapFocus(null);
-  }, [overlapKeys, anchorDate]);
 
   /**
    * The single route behind every "show me this problem" control: open Day
@@ -251,7 +263,7 @@ function ManagerScreen() {
     ensureIncluded("campusIds", nav.widen.campusIds);
     ensureIncluded("schoolIds", nav.widen.schoolIds);
     setSelection(null);
-    setOverlapFocus(null);
+    setOverlapFocusState(null);
     setViewMode("day");
     goToDay(nav.date);
     setDayFocus({
@@ -265,7 +277,7 @@ function ManagerScreen() {
   const focusTravelAt = (index: number) => {
     if (travelCount === 0) return;
     const next = ((index % travelCount) + travelCount) % travelCount;
-    setTravelCursor(next);
+    setTravelCycle({ signature: travelSignature, cursor: next });
     if (navigateToIssue(travelConflicts[next].lessonIds)) return;
     setTravelFocusNonce((n) => n + 1);
   };
@@ -287,10 +299,11 @@ function ManagerScreen() {
 
   const focusOverlap = (conflict: TeacherOverlap, selectId: string) => {
     const idx = overlapConflicts.findIndex((c) => overlapKey(c) === overlapKey(conflict));
-    if (idx >= 0) setOverlapCursor(idx);
+    if (idx >= 0) setOverlapCursorState({ signature: overlapSignature, index: idx });
     pendingConflictSelectRef.current = selectId;
     setSelection(null);
-    setOverlapFocus({
+    setOverlapFocusState({
+      signature: overlapSignature,
       key: overlapKey(conflict),
       selectId,
       nonce: (overlapFocus?.nonce ?? 0) + 1,
@@ -301,7 +314,7 @@ function ManagerScreen() {
     if (overlapCount === 0) return;
     const next = overlapCursor === null ? 0 : (overlapCursor + 1) % overlapCount;
     const conflict = overlapConflicts[next];
-    setOverlapCursor(next);
+    setOverlapCursorState({ signature: overlapSignature, index: next });
     if (navigateToIssue(conflict.lessonIds)) return;
     focusOverlap(conflict, earlierLessonId(conflict, lessonsById));
   };
@@ -322,13 +335,13 @@ function ManagerScreen() {
 
   const dismissLessonDetails = () => {
     setSelection(null);
-    if (!pendingConflictSelectRef.current) setOverlapFocus(null);
+    if (!pendingConflictSelectRef.current) setOverlapFocusState(null);
   };
 
   const selectLesson = (lesson: Lesson, el: HTMLElement) => {
     pendingConflictSelectRef.current = null;
     const related = overlapFocus && overlapFocus.key.split("|").includes(lesson.id);
-    if (!related) setOverlapFocus(null);
+    if (!related) setOverlapFocusState(null);
     // Picking a lesson outside the focused pair is how the manager moves on.
     if (dayFocus && !dayFocus.lessonIds.includes(lesson.id)) setDayFocus(null);
     setSelection({ lesson, rect: el.getBoundingClientRect() });
@@ -509,7 +522,7 @@ function ManagerScreen() {
       )}
       <ManagerTour
         onOpenImport={() => setImporting(true)}
-        onStepChange={setTourStep}
+        onStepChange={handleTourStepChange}
       />
     </div>
   );
