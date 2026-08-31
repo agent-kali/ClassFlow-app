@@ -38,10 +38,8 @@ export function Combobox({ options, value, onChange, placeholder, label, autoFoc
         (o) => o.label.toLowerCase().includes(q) || o.hint?.toLowerCase().includes(q)
       )
     : options;
-
-  useEffect(() => {
-    setHighlight(0);
-  }, [query]);
+  const highlightIndex =
+    filtered.length === 0 ? 0 : Math.min(highlight, filtered.length - 1);
 
   useEffect(() => {
     if (!open) return;
@@ -74,10 +72,12 @@ export function Combobox({ options, value, onChange, placeholder, label, autoFoc
         onFocus={() => {
           setOpen(true);
           setQuery("");
+          setHighlight(0);
         }}
         onChange={(e) => {
           setQuery(e.target.value);
           setOpen(true);
+          setHighlight(0);
         }}
         onKeyDown={(e) => {
           if (e.key === "ArrowDown") {
@@ -87,9 +87,9 @@ export function Combobox({ options, value, onChange, placeholder, label, autoFoc
           } else if (e.key === "ArrowUp") {
             e.preventDefault();
             setHighlight((h) => Math.max(h - 1, 0));
-          } else if (e.key === "Enter" && open && filtered[highlight]) {
+          } else if (e.key === "Enter" && open && filtered[highlightIndex]) {
             e.preventDefault();
-            pick(filtered[highlight].id);
+            pick(filtered[highlightIndex].id);
           } else if (e.key === "Escape") {
             setOpen(false);
           }
@@ -117,7 +117,7 @@ export function Combobox({ options, value, onChange, placeholder, label, autoFoc
               }}
               onMouseEnter={() => setHighlight(i)}
               className={`flex cursor-pointer items-baseline gap-2 px-2 py-1.5 text-[13px] ${
-                i === highlight ? "bg-accent-soft text-accent" : ""
+                i === highlightIndex ? "bg-accent-soft text-accent" : ""
               }`}
             >
               <span className="cf-mono font-medium">{o.label}</span>

@@ -149,10 +149,18 @@ export function WeekTimeline({
   const days = useMemo(() => weekDates(parseISO(anchorDate)), [anchorDate]);
   const now = useNowMinute();
   const isNarrow = useIsNarrow();
-  const [mobileDayIndex, setMobileDayIndex] = useState(() => {
+  const weekTodayKey = `${anchorDate}:${today}`;
+  const [mobileDay, setMobileDay] = useState(() => {
     const idx = days.indexOf(today);
-    return idx >= 0 ? idx : 0;
+    return { key: weekTodayKey, index: idx >= 0 ? idx : 0 };
   });
+  const todayIdx = days.indexOf(today);
+  const mobileDayIndex =
+    mobileDay.key === weekTodayKey
+      ? mobileDay.index
+      : todayIdx >= 0
+        ? todayIdx
+        : mobileDay.index;
 
   const [drag, setDrag] = useState<DragState | null>(null);
   const [dropTarget, setDropTarget] = useState<DropTarget | null>(null);
@@ -162,9 +170,12 @@ export function WeekTimeline({
   const stackRefs = useRef<Map<string, HTMLDivElement | null>>(new Map());
   const suppressClickRef = useRef(false);
   const onConflictFocusedRef = useRef(onConflictFocused);
-  onConflictFocusedRef.current = onConflictFocused;
   const lessonsRef = useRef(lessons);
-  lessonsRef.current = lessons;
+
+  useEffect(() => {
+    onConflictFocusedRef.current = onConflictFocused;
+    lessonsRef.current = lessons;
+  }, [onConflictFocused, lessons]);
 
   const tourLessonId = useMemo(
     () =>
@@ -202,11 +213,6 @@ export function WeekTimeline({
   const nowMin = nowMinOn(today, now);
 
   useEffect(() => {
-    const idx = days.indexOf(today);
-    if (idx >= 0) setMobileDayIndex(idx);
-  }, [anchorDate, days, today]);
-
-  useEffect(() => {
     if (!focusedTravelKey || travelFocusNonce === 0) return;
     const t = requestAnimationFrame(() => {
       const el = scrollerRef.current?.querySelector(
@@ -223,7 +229,7 @@ export function WeekTimeline({
     const focused = lessonsRef.current.find((l) => l.id === focusLessonId);
     const dayIdx = focused ? days.indexOf(focused.date) : -1;
     if (isNarrow && dayIdx >= 0 && dayIdx !== mobileDayIndex) {
-      setMobileDayIndex(dayIdx);
+      setMobileDay({ key: weekTodayKey, index: dayIdx });
       return;
     }
 
@@ -235,7 +241,7 @@ export function WeekTimeline({
       onConflictFocusedRef.current?.(focusLessonId, el);
     }, 50);
     return () => clearTimeout(timer);
-  }, [focusLessonId, overlapFocusNonce, mobileDayIndex, isNarrow, days]);
+  }, [focusLessonId, overlapFocusNonce, mobileDayIndex, isNarrow, days, weekTodayKey]);
 
   const focusedLessonIds = useMemo(() => {
     if (!focusedTravelKey) return null;
@@ -260,26 +266,26 @@ export function WeekTimeline({
       }
     : undefined;
 
-  const finishDrag = (target: DropTarget | null, activeDrag: DragState | null) => {
-    if (activeDrag && target && onMoveLesson) {
-      const { lesson } = activeDrag;
-      if (target.date !== lesson.date) {
-        onMoveLesson(lesson.id, target.date, lesson.startMin, lesson.endMin);
-        suppressClickRef.current = true;
-        requestAnimationFrame(() => {
-          suppressClickRef.current = false;
-        });
-      }
-    }
-    setDrag(null);
-    setDropTarget(null);
-    dropTargetRef.current = null;
-  };
-
   useEffect(() => {
     if (!drag) return;
 
     const activeDrag = drag;
+
+    const finishDrag = (target: DropTarget | null, ended: DragState | null) => {
+      if (ended && target && onMoveLesson) {
+        const { lesson } = ended;
+        if (target.date !== lesson.date) {
+          onMoveLesson(lesson.id, target.date, lesson.startMin, lesson.endMin);
+          suppressClickRef.current = true;
+          requestAnimationFrame(() => {
+            suppressClickRef.current = false;
+          });
+        }
+      }
+      setDrag(null);
+      setDropTarget(null);
+      dropTargetRef.current = null;
+    };
 
     const onMove = (e: PointerEvent) => {
       if (e.pointerId !== activeDrag.pointerId) return;
@@ -429,7 +435,7 @@ export function WeekTimeline({
                   role="tab"
                   aria-selected={isActive}
                   className={`week-agenda__day-tab ${isActive ? "week-agenda__day-tab--active" : ""} ${isToday ? "week-agenda__day-tab--today" : ""}`}
-                  onClick={() => setMobileDayIndex(i)}
+                  onClick={() => setMobileDay({ key: weekTodayKey, index: i })}
                 >
                   <span className="cf-mono text-[11px] font-semibold uppercase">
                     {format(d, "EEE")}
