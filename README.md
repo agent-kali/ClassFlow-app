@@ -6,7 +6,9 @@ Started as a real Excel→API importer for an HCMC agency ([archived ClassFlow](
 
 Every partner school emails its schedule as a differently-shaped spreadsheet. ClassFlow absorbs those formats into one canonical lesson model: **every school's chaos flows in; one clean, current, auditable truth flows out.**
 
-**Demo status:** mock data, no auth, no database. Changes reset on refresh. A live Vercel URL belongs in this paragraph once deployed — until then run locally.
+**Live demo:** [class-flow-app.vercel.app](https://class-flow-app.vercel.app) · [manager](https://class-flow-app.vercel.app/manager) · [teacher](https://class-flow-app.vercel.app/teacher)
+
+**Demo status:** mock data, no auth, no database. Changes reset on refresh.
 
 ## Run it
 
