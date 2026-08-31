@@ -1,6 +1,9 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useSyncExternalStore, type ReactNode } from "react";
+
+/** Client snapshot is always true; nothing external will flip it later. */
+const subscribe = () => () => {};
 
 /**
  * The demo's data is seeded around the real current date in a client-side
@@ -8,8 +11,7 @@ import { useEffect, useState, type ReactNode } from "react";
  * mismatch. A real backend removes the need for this gate.
  */
 export function ClientOnly({ children }: { children: ReactNode }) {
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
+  const mounted = useSyncExternalStore(subscribe, () => true, () => false);
   if (!mounted) return null;
   return children;
 }
