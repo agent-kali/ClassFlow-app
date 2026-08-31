@@ -6,50 +6,56 @@ This document is a contract, not an implementation: no application routes, datab
 
 ## Asynchrony
 
-Every `DataSource` method is asynchronous and returns a `Promise`. The HTTP request corresponds to the method call; the HTTP response is the value the promise **resolves** to.
+The current `DataSource` in `src/data/source.ts` is **synchronous**. Methods return plain values (`School[]`, `Lesson`, `void`, …), not `Promise`.
 
-| Method | Returned promise |
-| --- | --- |
-| `listSchools` | `Promise<School[]>` |
-| `listCampuses` | `Promise<Campus[]>` |
-| `listRooms` | `Promise<Room[]>` |
-| `listTeachers` | `Promise<Teacher[]>` |
-| `listClassGroups` | `Promise<ClassGroup[]>` |
-| `listLessons` | `Promise<Lesson[]>` |
-| `getFxRate` | `Promise<FxRate>` |
-| `createLesson` | `Promise<Lesson>` |
-| `updateLesson` | `Promise<void>` |
-| `setLessonStatus` | `Promise<void>` |
-| `rescheduleLesson` | `Promise<void>` |
-| `importLessons` | `Promise<Lesson[]>` |
+`src/data/mockSource.ts` and `src/data/store.ts` call those methods synchronously. An HTTP round-trip is inherently asynchronous. A future HTTP-backed implementation must sit behind an **async adapter** or an **async replacement** of `DataSource` (as the interface comment already notes: methods become async) so the UI can `await` without changing call sites beyond that seam.
 
-`Promise<void>` maps to **204 No Content** with an empty body. Other successful responses are JSON (`Content-Type: application/json`): **200 OK** for reads, **201 Created** for `createLesson` and `importLessons`.
+This contract describes the HTTP mapping of those methods. It does not claim the TypeScript interface returns `Promise` today.
+
+| Method | Current TypeScript return | HTTP success |
+| --- | --- | --- |
+| `listSchools` | `School[]` | **200** `School[]` |
+| `listCampuses` | `Campus[]` | **200** `Campus[]` |
+| `listRooms` | `Room[]` | **200** `Room[]` |
+| `listTeachers` | `Teacher[]` | **200** `Teacher[]` |
+| `listClassGroups` | `ClassGroup[]` | **200** `ClassGroup[]` |
+| `listLessons` | `Lesson[]` | **200** `Lesson[]` |
+| `getFxRate` | `FxRate` | **200** `FxRate` |
+| `createLesson` | `Lesson` | **201** `Lesson` |
+| `updateLesson` | `void` | **204** empty body |
+| `setLessonStatus` | `void` | **204** empty body |
+| `rescheduleLesson` | `void` | **204** empty body |
+| `importLessons` | `Lesson[]` | **201** `Lesson[]` |
+
+Successful JSON responses use `Content-Type: application/json`.
 
 ## Value formats
 
-Field names are unchanged. JSON on the wire uses the formats below.
+Wire types match `src/domain/types.ts`. There is no `HH:MM` conversion and no formatted money strings.
 
-### Dates — ISO 8601
+### Dates — `YYYY-MM-DD`
 
-Fields `date`, `capturedOn`, and `movedFrom.date` are calendar dates `YYYY-MM-DD` (ISO 8601 `date`). Example: `"2026-08-31"`. Full date-time values are not used.
+Fields `date`, `capturedOn`, and `movedFrom.date` are calendar-date strings `YYYY-MM-DD` (ISO 8601 date, no time component). Example: `"2026-08-31"`.
 
-### Time — `HH:MM`
+Lesson `date` values and minute offsets (`startMin`, `endMin`, `movedFrom.startMin`) are **local Asia/Ho_Chi_Minh wall-clock time**. They are not converted to UTC and are not stored as UTC instants.
 
-Fields `startMin`, `endMin`, and `movedFrom.startMin` are **`HH:MM`** strings in JSON (24-hour clock, both components zero-padded). Examples: `"09:00"`, `"18:05"`.
+### Minutes from midnight — integers
 
-In the domain these are minutes from midnight; there is no extra wire field. Mapping: `"HH:MM"` ↔ `H * 60 + M`.
+As in `Lesson`: duration is derived; slots are not fixed.
 
-Pattern: `^([01][0-9]|2[0-3]):[0-5][0-9]$`.
+| Field | JSON type | Range |
+| --- | --- | --- |
+| `startMin` | integer | `0`–`1439` |
+| `endMin` | integer | `1`–`1440`, strictly greater than `startMin` |
+| `movedFrom.startMin` | integer | `0`–`1439` |
 
-### Money — string with two decimal places plus currency code
+`endMin` of `1440` is the end of the local calendar day (24:00). A value that is not an integer, is out of range, or has `endMin <= startMin` is **422**.
 
-Monetary amounts are JSON strings: two digits after the decimal point (dot separator), a space, then an ISO 4217 code.
+### Money and FX — numbers
 
-Form: `"<amount> <CURRENCY>"`. Examples: `"22.00 USD"`, `"17.50 USD"`.
+`Teacher.usdRate` is a JSON **number** (fixed hourly rate in USD). Example: `22`, `23.5`.
 
-The only money field in the types is `Teacher.usdRate` (fixed hourly rate in USD). `FxRate.vndPerUsd` is a rate (VND per 1 USD), not an amount; in JSON it is a number, as in `types.ts`. VND is never stored: it is always derived from USD and the captured rate.
-
-Money pattern: `^[0-9]+\.[0-9]{2} [A-Z]{3}$`.
+`FxRate.vndPerUsd` is a JSON **number** (VND per 1 USD). VND amounts are never stored; they are always derived from USD and the captured rate.
 
 ### Statuses and other enums
 
@@ -62,6 +68,21 @@ Values are only those listed in `types.ts`:
 | `SchoolColor` | `School.color` | `"teal"` \| `"amber"` \| `"plum"` \| `"moss"` |
 
 `LessonInput` is all `Lesson` fields except `id`. `Partial<LessonInput>` is the same fields, all optional.
+
+## Conflicts are persisted, not rejected
+
+`src/domain/conflicts.ts` detects overlaps and travel-gap warnings **after** lessons exist. The manager is shown conflicts; writes are not blocked. `src/data/store.ts` persists overlapping lessons with no uniqueness check on teacher, room, or time.
+
+Therefore this contract does **not** use **409** for schedule collisions. That would invent a business rule the domain does not enforce.
+
+- **Teacher overlaps** are accepted and persisted.
+- **Room overlaps** are accepted and persisted.
+- **Travel gaps** (same teacher, different campuses, gap under `MIN_TRAVEL_GAP_MINUTES` / 45) are warnings computed by `detectConflicts`, not rejected writes.
+- **`importLessons` may contain overlaps** among imported rows and with existing lessons; the batch is still persisted.
+- Cancelled and no-show lessons do not participate in conflict detection (`conflicts.ts`), but that filtering is read-side only and does not change write acceptance.
+- There is no `DataSource` method to list conflicts; they are not an HTTP resource in this contract.
+
+Malformed or invalid **import** batches (body that does not match `LessonInput[]`, including any element that fails the `LessonInput` schema) are rejected **atomically** with **422**: no lesson from that request is created.
 
 ## Resource schemas
 
@@ -128,11 +149,7 @@ Values are only those listed in `types.ts`:
     "code": { "type": "string" },
     "name": { "type": "string" },
     "category": { "enum": ["native", "non-native", "esl"] },
-    "usdRate": {
-      "type": "string",
-      "pattern": "^[0-9]+\\.[0-9]{2} [A-Z]{3}$",
-      "description": "Hourly rate: two decimal places and a currency code, e.g. \"22.00 USD\"."
-    }
+    "usdRate": { "type": "number" }
   }
 }
 ```
@@ -174,8 +191,8 @@ Values are only those listed in `types.ts`:
   "properties": {
     "id": { "type": "string" },
     "date": { "type": "string", "format": "date" },
-    "startMin": { "type": "string", "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$" },
-    "endMin": { "type": "string", "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$" },
+    "startMin": { "type": "integer", "minimum": 0, "maximum": 1439 },
+    "endMin": { "type": "integer", "minimum": 1, "maximum": 1440 },
     "classGroupId": { "type": "string" },
     "roomId": { "type": "string" },
     "teacherId": { "type": "string" },
@@ -189,16 +206,18 @@ Values are only those listed in `types.ts`:
       "required": ["date", "startMin"],
       "properties": {
         "date": { "type": "string", "format": "date" },
-        "startMin": { "type": "string", "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$" }
+        "startMin": { "type": "integer", "minimum": 0, "maximum": 1439 }
       }
     }
   }
 }
 ```
 
-Constraint: `endMin` must be strictly after `startMin` on the same `date`. Otherwise **422**.
+Constraint: `endMin` must be strictly greater than `startMin`. Otherwise **422**.
 
 Optional fields (`cmName`, `weekCode`, `movedFrom`) may be omitted; `null` is not allowed.
+
+`rescheduleLesson` in `store.ts` sets `movedFrom` to the first origin (`before.movedFrom` if already present, otherwise `{ date, startMin }` of the lesson before the move). `updateLesson` on `DataSource` applies the patch as given and does not invent `movedFrom`.
 
 ### LessonInput
 
@@ -206,7 +225,7 @@ Same as `Lesson` without `id` (`required` excludes `id`). Request body for `crea
 
 ### Partial LessonInput
 
-Same properties as `LessonInput`, all optional, `minProperties: 1`. An empty object `{}` yields **422**.
+Same properties as `LessonInput`, all optional. Matches `Partial<LessonInput>` in TypeScript. An empty object is a no-op patch, as in `store.ts`.
 
 ### FxRate
 
@@ -222,6 +241,8 @@ Same properties as `LessonInput`, all optional, `minProperties: 1`. An empty obj
   }
 }
 ```
+
+The current store always has one captured rate. `getFxRate` has no id argument.
 
 ### SetLessonStatusBody
 
@@ -249,8 +270,8 @@ The `date`, `startMin`, and `endMin` arguments of `rescheduleLesson` are the sam
   "required": ["date", "startMin", "endMin"],
   "properties": {
     "date": { "type": "string", "format": "date" },
-    "startMin": { "type": "string", "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$" },
-    "endMin": { "type": "string", "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$" }
+    "startMin": { "type": "integer", "minimum": 0, "maximum": 1439 },
+    "endMin": { "type": "integer", "minimum": 1, "maximum": 1440 }
   }
 }
 ```
@@ -261,22 +282,26 @@ Exactly one HTTP endpoint per method. No query parameters: none of the `DataSour
 
 `{id}` is `Lesson.id` (`string`).
 
+Signatures below are the **current synchronous** interface.
+
 | Interface method | HTTP method | URL | query params | request body | response schema | Error codes |
 | --- | --- | --- | --- | --- | --- | --- |
-| `listSchools(): Promise<School[]>` | `GET` | `/schools` | — | — | `School[]` | — |
-| `listCampuses(): Promise<Campus[]>` | `GET` | `/campuses` | — | — | `Campus[]` | — |
-| `listRooms(): Promise<Room[]>` | `GET` | `/rooms` | — | — | `Room[]` | — |
-| `listTeachers(): Promise<Teacher[]>` | `GET` | `/teachers` | — | — | `Teacher[]` | — |
-| `listClassGroups(): Promise<ClassGroup[]>` | `GET` | `/class-groups` | — | — | `ClassGroup[]` | — |
-| `listLessons(): Promise<Lesson[]>` | `GET` | `/lessons` | — | — | `Lesson[]` | — |
-| `getFxRate(): Promise<FxRate>` | `GET` | `/fx-rate` | — | — | `FxRate` | `404` |
-| `createLesson(input): Promise<Lesson>` | `POST` | `/lessons` | — | `LessonInput` | `Lesson` | `409`, `422` |
-| `updateLesson(id, patch): Promise<void>` | `PATCH` | `/lessons/{id}` | — | `Partial<LessonInput>` | — (204) | `404`, `409`, `422` |
-| `setLessonStatus(id, status): Promise<void>` | `PATCH` | `/lessons/{id}/status` | — | `SetLessonStatusBody` | — (204) | `404`, `409`, `422` |
-| `rescheduleLesson(id, date, startMin, endMin): Promise<void>` | `PATCH` | `/lessons/{id}/reschedule` | — | `RescheduleLessonBody` | — (204) | `404`, `409`, `422` |
-| `importLessons(inputs): Promise<Lesson[]>` | `POST` | `/lessons/import` | — | `LessonInput[]` | `Lesson[]` | `409`, `422` |
+| `listSchools(): School[]` | `GET` | `/schools` | — | — | `School[]` | — |
+| `listCampuses(): Campus[]` | `GET` | `/campuses` | — | — | `Campus[]` | — |
+| `listRooms(): Room[]` | `GET` | `/rooms` | — | — | `Room[]` | — |
+| `listTeachers(): Teacher[]` | `GET` | `/teachers` | — | — | `Teacher[]` | — |
+| `listClassGroups(): ClassGroup[]` | `GET` | `/class-groups` | — | — | `ClassGroup[]` | — |
+| `listLessons(): Lesson[]` | `GET` | `/lessons` | — | — | `Lesson[]` | — |
+| `getFxRate(): FxRate` | `GET` | `/fx-rate` | — | — | `FxRate` | — |
+| `createLesson(input): Lesson` | `POST` | `/lessons` | — | `LessonInput` | `Lesson` | `422` |
+| `updateLesson(id, patch): void` | `PATCH` | `/lessons/{id}` | — | `Partial<LessonInput>` | — (204) | `404`, `422` |
+| `setLessonStatus(id, status): void` | `PATCH` | `/lessons/{id}/status` | — | `SetLessonStatusBody` | — (204) | `404`, `422` |
+| `rescheduleLesson(id, date, startMin, endMin): void` | `PATCH` | `/lessons/{id}/reschedule` | — | `RescheduleLessonBody` | — (204) | `404`, `422` |
+| `importLessons(inputs): Lesson[]` | `POST` | `/lessons/import` | — | `LessonInput[]` | `Lesson[]` | `422` |
 
-An empty collection is `[]` with **200**, not **404**. **404** only when the resource itself is missing (no lesson with `{id}`, or no captured FX rate).
+An empty collection is `[]` with **200**, not **404**. **404** applies when a mutation targets a lesson `{id}` that does not exist (`store.ts` finds no row and no-ops). **409** is not used.
+
+`editLesson` exists on the store only, not on `DataSource`, and has no endpoint.
 
 ## Errors
 
@@ -284,7 +309,7 @@ Error bodies are always JSON. Successful responses are not wrapped in an error s
 
 ### 404 Not Found
 
-The resource identified by id (or the single FX rate) does not exist. Examples: `PATCH /lessons/{id}` with an unknown `id`; `GET /fx-rate` when no rate has been captured.
+No lesson with the given `{id}`. Used by `updateLesson`, `setLessonStatus`, and `rescheduleLesson`.
 
 ```json
 {
@@ -305,37 +330,13 @@ Example: `{"status":404,"code":"not_found","message":"Lesson not found.","resour
 
 ### 409 Conflict
 
-The resulting state cannot be applied: for example the room is already occupied in that interval (`roomId` + `date` + overlap of `startMin`/`endMin` with another lesson whose `status` is `"scheduled"`). Same rule for a teacher in the same interval. Lessons with `cancelled` or `no-show` do not occupy a slot.
-
-Applies to `createLesson`, `updateLesson`, `rescheduleLesson`, `importLessons` (the entire import is rejected), and `setLessonStatus` when moving to `scheduled` if the slot is taken.
-
-```json
-{
-  "type": "object",
-  "additionalProperties": false,
-  "required": ["status", "code", "message"],
-  "properties": {
-    "status": { "const": 409 },
-    "code": { "const": "conflict" },
-    "message": { "type": "string" },
-    "resource": { "type": "string" },
-    "id": { "type": "string" },
-    "roomId": { "type": "string" },
-    "teacherId": { "type": "string" },
-    "date": { "type": "string", "format": "date" },
-    "startMin": { "type": "string", "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$" },
-    "endMin": { "type": "string", "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$" }
-  }
-}
-```
-
-Optional error fields are existing `Lesson` fields (`id`, `roomId`, `teacherId`, `date`, `startMin`, `endMin`) to identify the occupied slot. No new resource fields.
-
-Example: `{"status":409,"code":"conflict","message":"Room is occupied.","resource":"Room","id":"ls-1001","roomId":"ot-03-205","date":"2026-08-31","startMin":"18:00","endMin":"19:00"}`.
+Not used. Overlaps and travel gaps are not write-time invariants. See [Conflicts are persisted, not rejected](#conflicts-are-persisted-not-rejected).
 
 ### 422 Unprocessable Entity
 
-The body does not match the schema: invalid JSON, wrong type, unknown field, empty `Partial<LessonInput>`, value outside an enum, date not ISO 8601, time not `HH:MM`, money not in the form `"12.00 USD"`, `endMin` not after `startMin`, or a reference to a missing `classGroupId` / `roomId` / `teacherId`.
+The body does not match the schema: invalid JSON, wrong type, unknown field, value outside an enum, `date` not `YYYY-MM-DD`, `startMin` / `endMin` / `movedFrom.startMin` not integers in range, `endMin <= startMin`, or `usdRate` / `vndPerUsd` not a number.
+
+For `importLessons`, any invalid element fails the **entire** batch; nothing is written.
 
 ```json
 {
@@ -353,7 +354,7 @@ The body does not match the schema: invalid JSON, wrong type, unknown field, emp
 
 `field` is a field name from `types.ts` when the error is tied to a single field.
 
-Example: `{"status":422,"code":"unprocessable_entity","message":"endMin must be after startMin.","field":"endMin"}`.
+Example: `{"status":422,"code":"unprocessable_entity","message":"endMin must be greater than startMin.","field":"endMin"}`.
 
 ## Coverage checklist
 
