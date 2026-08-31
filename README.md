@@ -2,7 +2,11 @@
 
 Scheduling and pay for a language-teaching agency in Ho Chi Minh City — a high-fidelity, front-end-only demo on mock data.
 
+Started as a real Excel→API importer for an HCMC agency ([archived ClassFlow](https://github.com/agent-kali/ClassFlow)).
+
 Every partner school emails its schedule as a differently-shaped spreadsheet. ClassFlow absorbs those formats into one canonical lesson model: **every school's chaos flows in; one clean, current, auditable truth flows out.**
+
+**Demo status:** mock data, no auth, no database. Changes reset on refresh. A live Vercel URL belongs in this paragraph once deployed — until then run locally.
 
 ## Run it
 
