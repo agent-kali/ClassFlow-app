@@ -87,6 +87,25 @@ describe("earningsFor earned vs scheduled", () => {
     expect(e.earnedCount).toBe(0);
   });
 
+  it("no-show in range increments excludedCount and adds no hours", () => {
+    const noShow = lesson({
+      id: "ls-ns",
+      date: "2026-09-02",
+      startMin: EVENING_START,
+      endMin: EVENING_END,
+      status: "no-show",
+    });
+    const asOf: Instant = { date: "2026-09-02", min: 22 * 60 };
+    const e = earningsFor(TEACHER, [noShow], RANGE, asOf);
+    expect(e.excludedCount).toBe(1);
+    expect(e.hours).toBe(0);
+    expect(e.earnedHours).toBe(0);
+    expect(e.usd).toBe(0);
+    expect(e.earnedUsd).toBe(0);
+    expect(e.lessonCount).toBe(0);
+    expect(e.earnedCount).toBe(0);
+  });
+
   it("a previous-date lesson is earned regardless of asOf.min", () => {
     const prior = lesson({
       id: "ls-prior",

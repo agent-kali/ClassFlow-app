@@ -11,6 +11,7 @@ import { usdToVnd, formatUsd, formatVnd } from "@/domain/money";
 import { Badge, schoolClass } from "@/components/Badge";
 import { SchoolChip } from "@/components/SchoolChip";
 import type { PeriodRange } from "./PeriodSwitcher";
+import { countTeacherStream, formatTeacherStreamSubline } from "./streamSummary";
 
 const DAY_HEADING = "EEE d MMM";
 
@@ -35,6 +36,7 @@ export function TeacherStream({
   const fxRate = useFxRate();
   const [now, setNow] = useState(() => new Date());
   const todaySectionRef = useRef<HTMLElement | null>(null);
+  const heroRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 60_000);
@@ -71,11 +73,8 @@ export function TeacherStream({
     return keys;
   }, [mine]);
 
-  const scheduledCount = mine.filter(isPayable).length;
-  const deliveredCount = mine.filter((l) => isPayable(l) && lessonHasEnded(l, asOf)).length;
-  const cancelledCount = mine.length - scheduledCount;
-  const allDelivered =
-    mine.length > 0 && mine.every((l) => isPayable(l) && lessonHasEnded(l, asOf));
+  const counts = countTeacherStream(mine, asOf);
+  const allDelivered = counts.allDelivered;
 
   const happeningNow = mine.find(
     (l) =>
@@ -92,20 +91,13 @@ export function TeacherStream({
   const heroLesson = happeningNow ?? nextUp;
 
   useEffect(() => {
-    todaySectionRef.current?.scrollIntoView({ block: "start" });
-  }, [today, range.from, range.to, teacher.id]);
-
-  let subline: string;
-  if (mine.length === 0) {
-    subline = "No lessons in this period.";
-  } else if (allDelivered) {
-    subline = `${mine.length} lesson${mine.length === 1 ? "" : "s"} across ${dayKeys.length} day${dayKeys.length === 1 ? "" : "s"}`;
-  } else {
-    subline = `${scheduledCount} scheduled · ${deliveredCount} delivered`;
-    if (cancelledCount > 0) {
-      subline += ` · ${cancelledCount} cancelled`;
-    }
-  }
+    const section = todaySectionRef.current;
+    if (!section) return;
+    const heroH = heroRef.current?.getBoundingClientRect().height ?? 0;
+    const stickyTop = window.matchMedia("(min-width: 1280px)").matches ? 16 : 0;
+    section.style.scrollMarginTop = `${stickyTop + heroH + 8}px`;
+    section.scrollIntoView({ block: "start" });
+  }, [today, range.from, range.to, teacher.id, heroLesson?.id]);
 
   return (
     <div className="flex flex-col gap-4">
@@ -113,20 +105,25 @@ export function TeacherStream({
         <h2 className="text-[15px] font-semibold leading-tight">
           {allDelivered ? `Delivered — ${scopeLabel}` : scopeLabel}
         </h2>
-        <p className="mt-0.5 text-[12px] text-ink-mute">{subline}</p>
+        <p className="mt-0.5 text-[12px] text-ink-mute">
+          {formatTeacherStreamSubline(counts, dayKeys.length)}
+        </p>
       </header>
 
       {heroLesson && (
-        <NextLessonHero
-          lesson={heroLesson}
-          lookups={lookups}
-          teacher={teacher}
-          fxRate={fxRate}
-          happeningNow={heroLesson === happeningNow}
-          waitLabel={
-            heroLesson === happeningNow ? null : waitLabel(asOf, heroLesson)
-          }
-        />
+        <div ref={heroRef} className="sticky top-0 z-10 bg-ground pb-2 xl:top-4">
+          <NextLessonHero
+            lesson={heroLesson}
+            today={today}
+            lookups={lookups}
+            teacher={teacher}
+            fxRate={fxRate}
+            happeningNow={heroLesson === happeningNow}
+            waitLabel={
+              heroLesson === happeningNow ? null : waitLabel(asOf, heroLesson)
+            }
+          />
+        </div>
       )}
 
       {dayKeys.map((date) => {
@@ -188,6 +185,7 @@ function waitLabel(asOf: Instant, lesson: Pick<Lesson, "date" | "startMin">): st
 
 function NextLessonHero({
   lesson,
+  today,
   lookups,
   teacher,
   fxRate,
@@ -195,6 +193,7 @@ function NextLessonHero({
   waitLabel: wait,
 }: {
   lesson: Lesson;
+  today: string;
   lookups: ReturnType<typeof useLookups>;
   teacher: Teacher;
   fxRate: ReturnType<typeof useFxRate>;
@@ -207,6 +206,7 @@ function NextLessonHero({
   const school = lookups.schoolOfRoom(lesson.roomId);
   const usd = lessonHours(lesson) * teacher.usdRate;
   const durationMin = lesson.endMin - lesson.startMin;
+  const showDate = lesson.date !== today;
 
   return (
     <article
@@ -219,6 +219,11 @@ function NextLessonHero({
       </p>
       <div className="mt-1.5 flex items-baseline gap-2">
         <span className="cf-card__time cf-mono text-[13px] font-semibold">
+          {showDate && (
+            <span className="font-medium text-ink-mute">
+              {format(parseISO(lesson.date), DAY_HEADING)} ·{" "}
+            </span>
+          )}
           {formatRange(lesson.startMin, lesson.endMin)}
           <span className="ml-1.5 font-medium text-ink-mute">· {formatDuration(durationMin)}</span>
         </span>
@@ -227,6 +232,12 @@ function NextLessonHero({
         <span className="text-[15px] font-semibold">{group?.program}</span>
         <span className="cf-mono text-[12px] text-ink-mute">{group?.code}</span>
       </div>
+      <p className="mt-0.5 text-[12px] text-ink-mute">
+        {lesson.curriculum}
+        {lesson.weekCode && (
+          <span className="cf-mono ml-1.5 text-[11px]">{lesson.weekCode}</span>
+        )}
+      </p>
       <div className="mt-2 flex items-baseline justify-between gap-3">
         <span className="min-w-0 text-[12px] text-ink-mute">
           {room?.name} · {campus?.name}
