@@ -41,7 +41,7 @@ python -m pytest -q
 
 - **Landing** (`/`) — public product page for recruiters: positioning, domain rules, and entry into the live demos (EN/VI).
 - **Schedule** (`/manager`) — the manager's dense ledger. A continuous-time week ruler where a lesson's height is literally its duration (35, 45, 60, 70, 90 minutes — this domain has no uniform grid). Click a lesson to cancel, mark no-show, or move it; drag empty space (5-minute snap) or use "New lesson" to create. Double-bookings and tight campus-to-campus travel gaps surface themselves. The pay strip at the bottom shows every teacher's week pay and flashes the delta on every edit. "Import a schedule" shows a school's raw spreadsheet flowing column-by-column into the canonical model, then actually inserts the lessons. Optional guided tour: `/manager?tour=1`.
-- **Teacher view** (`/teacher`) — the phone screen, read-only by design. One merged stream across every school, a "now" marker, and running week/month earnings in both USD and VND. Cancelled lessons stay visible and are explicitly not paid; delivered lessons settle solid — money already earned.
+- **Teacher view** (`/teacher`) — the phone screen, read-only by design. One merged stream across every school, a next-lesson hero, and week/month earnings split into earned-to-now vs scheduled (USD and VND). Cancelled lessons stay visible and are explicitly not paid; finished scheduled lessons settle as earned.
 
 Edits on the manager screen appear on the teacher screen immediately. There is no save-and-send.
 

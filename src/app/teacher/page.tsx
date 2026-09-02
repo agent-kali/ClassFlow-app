@@ -52,18 +52,21 @@ function TeacherScreen() {
                 </p>
               </div>
               {/* Demo affordance: stand in any teacher's shoes. */}
-              <select
-                aria-label="Viewing as teacher"
-                value={teacher.id}
-                onChange={(e) => setTeacherId(e.target.value)}
-                className="cf-mono rounded border border-line bg-raised px-2 py-1.5 text-[12px] focus:border-accent focus:outline-none xl:w-full"
-              >
-                {teachers.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.code}
-                  </option>
-                ))}
-              </select>
+              <div className="flex min-w-0 items-center gap-2 xl:w-full">
+                <span className="shrink-0 text-[11px] text-ink-mute">Viewing as</span>
+                <select
+                  aria-label="Viewing as teacher"
+                  value={teacher.id}
+                  onChange={(e) => setTeacherId(e.target.value)}
+                  className="cf-mono min-w-0 flex-1 rounded border border-line bg-raised px-2 py-1.5 text-[12px] focus:border-accent focus:outline-none"
+                >
+                  {teachers.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.code} · {t.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
 
             <div className="mb-4">
