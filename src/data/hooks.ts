@@ -3,7 +3,7 @@
 import { useMemo } from "react";
 import { useClassFlowStore, type PayEffect } from "./store";
 import type { Campus, ClassGroup, Room, School, Teacher } from "@/domain/types";
-import { earningsFor, type Earnings } from "@/domain/earnings";
+import { earningsFor, type Earnings, type Instant } from "@/domain/earnings";
 import { detectConflicts, conflictsByLesson, type Conflict } from "@/domain/conflicts";
 
 /**
@@ -93,14 +93,25 @@ export function useLookups() {
   }, [schools, campuses, rooms, teachers, classGroups]);
 }
 
-export function useEarnings(teacher: Teacher | undefined, range: { from: string; to: string }): Earnings {
+const EMPTY_EARNINGS: Earnings = {
+  hours: 0,
+  usd: 0,
+  lessonCount: 0,
+  excludedCount: 0,
+  earnedHours: 0,
+  earnedUsd: 0,
+  earnedCount: 0,
+};
+
+export function useEarnings(
+  teacher: Teacher | undefined,
+  range: { from: string; to: string },
+  asOf: Instant
+): Earnings {
   const lessons = useLessons();
   return useMemo(
-    () =>
-      teacher
-        ? earningsFor(teacher, lessons, range)
-        : { hours: 0, usd: 0, lessonCount: 0, excludedCount: 0 },
-    [teacher, lessons, range]
+    () => (teacher ? earningsFor(teacher, lessons, range, asOf) : EMPTY_EARNINGS),
+    [teacher, lessons, range, asOf]
   );
 }
 

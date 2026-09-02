@@ -35,7 +35,7 @@ export function TopBar() {
       </Link>
       <nav className="flex min-w-0 items-center gap-0.5 sm:gap-1" aria-label="View">
         {tab("/manager", "Schedule")}
-        {tab("/teacher", "Teacher view", "teacher-nav")}
+        {tab("/teacher", "My schedule", "teacher-nav")}
       </nav>
       <div className="ml-auto flex shrink-0 items-center gap-2 sm:gap-3">
         <span

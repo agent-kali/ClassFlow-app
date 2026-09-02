@@ -1,12 +1,13 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { endOfMonth, format, parseISO, startOfMonth } from "date-fns";
 import type { Teacher } from "@/domain/types";
-import { useEarnings, useFxRate } from "@/data/hooks";
-import { toIsoDate, weekDates } from "@/domain/time";
+import { useEarnings, useFxRate, useToday } from "@/data/hooks";
+import { formatDuration, toIsoDate, weekDates } from "@/domain/time";
 import { formatFxRate, formatUsd } from "@/domain/money";
 import { MoneyPair } from "@/components/MoneyPair";
+import type { Instant } from "@/domain/earnings";
 import type { PeriodMode } from "./PeriodSwitcher";
 
 /** Compact inclusive range: "6–12 Jul", or "28 Jun – 4 Jul" when months differ. */
@@ -33,6 +34,18 @@ export function EarningsCard({
   mode: PeriodMode;
 }) {
   const fxRate = useFxRate();
+  const today = useToday();
+  const [now, setNow] = useState(() => new Date());
+
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 60_000);
+    return () => clearInterval(id);
+  }, []);
+
+  const asOf: Instant = useMemo(
+    () => ({ date: today, min: now.getHours() * 60 + now.getMinutes() }),
+    [today, now]
+  );
 
   const weekRange = useMemo(() => {
     const days = weekDates(parseISO(anchor));
@@ -43,8 +56,8 @@ export function EarningsCard({
     return { from: toIsoDate(startOfMonth(d)), to: toIsoDate(endOfMonth(d)) };
   }, [anchor]);
 
-  const week = useEarnings(teacher, weekRange);
-  const month = useEarnings(teacher, monthRange);
+  const week = useEarnings(teacher, weekRange, asOf);
+  const month = useEarnings(teacher, monthRange, asOf);
   const active = mode === "week" ? week : month;
 
   return (
@@ -58,16 +71,20 @@ export function EarningsCard({
         <PeriodColumn
           label="Week"
           rangeLabel={formatRangeLabel(weekRange.from, weekRange.to)}
-          usd={week.usd}
-          hours={week.hours}
+          earnedUsd={week.earnedUsd}
+          scheduledUsd={week.usd}
+          earnedHours={week.earnedHours}
+          scheduledHours={week.hours}
           lessonCount={week.lessonCount}
           active={mode === "week"}
         />
         <PeriodColumn
           label="Month"
           rangeLabel={formatRangeLabel(monthRange.from, monthRange.to)}
-          usd={month.usd}
-          hours={month.hours}
+          earnedUsd={month.earnedUsd}
+          scheduledUsd={month.usd}
+          earnedHours={month.earnedHours}
+          scheduledHours={month.hours}
           lessonCount={month.lessonCount}
           active={mode === "month"}
         />
@@ -81,7 +98,8 @@ export function EarningsCard({
       </p>
 
       <p className="mt-2 border-t border-line-soft pt-2 text-[11px] text-ink-mute">
-        {formatUsd(teacher.usdRate)}/hour, delivered lessons only.
+        {formatUsd(teacher.usdRate)}/hour. Scheduled counts until cancelled or no-show.
+        Earned is hours already finished.
         {active.excludedCount > 0 && (
           <span>
             {" "}
@@ -97,18 +115,23 @@ export function EarningsCard({
 function PeriodColumn({
   label,
   rangeLabel,
-  usd,
-  hours,
+  earnedUsd,
+  scheduledUsd,
+  earnedHours,
+  scheduledHours,
   lessonCount,
   active,
 }: {
   label: string;
   rangeLabel: string;
-  usd: number;
-  hours: number;
+  earnedUsd: number;
+  scheduledUsd: number;
+  earnedHours: number;
+  scheduledHours: number;
   lessonCount: number;
   active: boolean;
 }) {
+  const showScheduledCaption = earnedUsd !== scheduledUsd;
   return (
     <div
       className={`rounded-md px-2 py-1.5 ${active ? "bg-accent-soft/60 ring-1 ring-accent/25" : ""}`}
@@ -119,9 +142,15 @@ function PeriodColumn({
         {label}
       </p>
       <p className="text-[11px] text-ink-faint">{rangeLabel}</p>
-      <MoneyPair usd={usd} size="lg" />
-      <p className="cf-mono mt-1 text-[11px] text-ink-mute">
-        {hours.toFixed(2)}h · {lessonCount} lessons
+      <MoneyPair usd={earnedUsd} size={active ? "lg" : "md"} />
+      {showScheduledCaption && (
+        <p className={`cf-mono mt-0.5 text-[10px] ${active ? "text-ink-mute" : "text-ink-faint"}`}>
+          of {formatUsd(scheduledUsd)} scheduled
+        </p>
+      )}
+      <p className={`cf-mono mt-1 text-[11px] ${active ? "text-ink-mute" : "text-ink-faint"}`}>
+        {formatDuration(earnedHours * 60)} earned · {formatDuration(scheduledHours * 60)} scheduled
+        · {lessonCount} lessons
       </p>
     </div>
   );
