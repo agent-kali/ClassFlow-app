@@ -12,16 +12,17 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { LocaleToggle } from "@/components/LocaleToggle";
 import {
-  getLocaleSnapshot,
+  applyLocaleFromNavigation,
   parseLangParam,
-  setLocale,
-  type Locale,
+  useLocale,
 } from "@/features/landing/locale";
 import { formatTourProgress, getTourCopy } from "./copy";
 
 const TARGETS = ["import", "lesson-edit", "teacher-nav"] as const;
 type TourTarget = (typeof TARGETS)[number];
+type TourDirection = "forward" | "back";
 
 const TINT = "rgba(35,32,26,0.45)";
 
@@ -32,8 +33,27 @@ interface AnchorRect {
   height: number;
 }
 
-function resolveTourLocale(langParam: string | null): Locale {
-  return parseLangParam(langParam) ?? getLocaleSnapshot();
+function stepLayerClass(
+  i: number,
+  step: number,
+  outgoing: number | null,
+  direction: TourDirection,
+  enterReady: boolean
+): string {
+  const isActive = i === step;
+  const isOutgoing = outgoing !== null && i === outgoing && i !== step;
+  if (isActive && !enterReady) {
+    return direction === "forward"
+      ? "cf-tour-step cf-tour-step--enter-forward"
+      : "cf-tour-step cf-tour-step--enter-back";
+  }
+  if (isActive) return "cf-tour-step cf-tour-step--active";
+  if (isOutgoing) {
+    return direction === "forward"
+      ? "cf-tour-step cf-tour-step--exit-forward"
+      : "cf-tour-step cf-tour-step--exit-back";
+  }
+  return "cf-tour-step cf-tour-step--inactive";
 }
 
 export function ManagerTour({
@@ -48,24 +68,66 @@ export function ManagerTour({
   const pathname = usePathname();
   const tourParam = searchParams.get("tour");
   const active = tourParam === "1";
-  const langParam = searchParams.get("lang");
-  const locale = resolveTourLocale(langParam);
+  const [locale, setLocale] = useLocale();
+  const handoffAppliedRef = useRef(false);
 
   useEffect(() => {
-    if (!active) return;
-    const fromQuery = parseLangParam(langParam);
-    if (fromQuery) setLocale(fromQuery);
-  }, [active, langParam]);
+    if (!active) {
+      handoffAppliedRef.current = false;
+      return;
+    }
+    if (handoffAppliedRef.current) return;
+    handoffAppliedRef.current = true;
+    const fromQuery = parseLangParam(searchParams.get("lang"));
+    if (fromQuery) applyLocaleFromNavigation(fromQuery);
+    if (!searchParams.has("lang")) return;
+    const next = new URLSearchParams(searchParams.toString());
+    next.delete("lang");
+    const qs = next.toString();
+    const url = qs ? `${pathname}?${qs}` : pathname;
+    router.replace(url, { scroll: false });
+    if (typeof window !== "undefined") {
+      window.history.replaceState(window.history.state, "", url);
+    }
+  }, [active, searchParams, pathname, router]);
 
   const [step, setStep] = useState(0);
+  const [outgoing, setOutgoing] = useState<number | null>(null);
+  const [direction, setDirection] = useState<TourDirection>("forward");
+  const [enterReady, setEnterReady] = useState(true);
   const [dismissed, setDismissed] = useState(false);
   const [rect, setRect] = useState<AnchorRect | null>(null);
+  const [panelReady, setPanelReady] = useState(false);
+  const [panelHeight, setPanelHeight] = useState(310);
   const panelRef = useRef<HTMLDivElement>(null);
-  const titleId = useId();
-  const descId = useId();
+  const baseId = useId();
   const copy = getTourCopy(locale);
   const target = TARGETS[step] as TourTarget;
   const showing = active && !dismissed;
+
+  const go = (next: number) => {
+    const clamped = Math.max(0, Math.min(2, next));
+    if (clamped === step) return;
+    setOutgoing(step);
+    setDirection(clamped > step ? "forward" : "back");
+    setStep(clamped);
+    setEnterReady(false);
+    setPanelReady(false);
+  };
+
+  useLayoutEffect(() => {
+    if (enterReady) return;
+    let cancelled = false;
+    const id = requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (!cancelled) setEnterReady(true);
+      });
+    });
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(id);
+    };
+  }, [enterReady, step, direction]);
 
   const clearTourParam = useCallback(() => {
     setDismissed(true);
@@ -92,7 +154,10 @@ export function ManagerTour({
       setRect({ top: r.top, left: r.left, width: r.width, height: r.height });
     };
     apply();
-    requestAnimationFrame(apply);
+    requestAnimationFrame(() => {
+      apply();
+      setPanelReady(true);
+    });
   }, [target]);
 
   useLayoutEffect(() => {
@@ -155,9 +220,14 @@ export function ManagerTour({
     };
   }, [showing, target]);
 
+  useLayoutEffect(() => {
+    if (!showing) return;
+    const h = panelRef.current?.offsetHeight;
+    if (h) setPanelHeight((prev) => (prev === h ? prev : h));
+  }, [showing, step, enterReady, locale]);
+
   if (!showing) return null;
 
-  const stepCopy = copy.steps[step];
   const pad = target === "lesson-edit" ? 8 : 6;
   const highlight = rect
     ? {
@@ -168,7 +238,7 @@ export function ManagerTour({
       }
     : null;
 
-  const panelStyle = positionPanel(highlight, target);
+  const panelStyle = positionPanel(highlight, target, panelHeight);
 
   return createPortal(
     <div className="pointer-events-none fixed inset-0 z-[80]" role="presentation">
@@ -178,50 +248,71 @@ export function ManagerTour({
         ref={panelRef}
         role="dialog"
         aria-modal="false"
-        aria-labelledby={titleId}
-        aria-describedby={descId}
+        aria-labelledby={`${baseId}-title-${step}`}
+        aria-describedby={`${baseId}-body-${step}`}
         tabIndex={-1}
-        className="pointer-events-auto absolute z-[81] w-[min(100%-1rem,20.5rem)] rounded border border-line bg-raised p-3.5 shadow-[var(--shadow-pop)] focus:outline-none focus-visible:ring-2 focus-visible:ring-accent sm:w-[min(100%-1.5rem,22rem)] sm:p-4"
+        className={`pointer-events-auto absolute z-[81] w-[min(100%-1rem,20.5rem)] rounded border border-line bg-raised p-3.5 shadow-[var(--shadow-pop)] focus:outline-none focus-visible:ring-2 focus-visible:ring-accent sm:w-[min(100%-1.5rem,22rem)] sm:p-4 cf-tour-panel${
+          panelReady ? " cf-tour-panel--ready" : ""
+        }`}
         style={panelStyle}
       >
         <p className="cf-mono text-[10px] font-semibold uppercase tracking-wide text-accent">
           {formatTourProgress(copy.progress, step + 1)}
         </p>
-        <h2 id={titleId} className="mt-1.5 text-[15px] font-bold leading-snug">
-          {stepCopy.title}
-        </h2>
-        <p id={descId} className="mt-2 text-[13px] leading-relaxed text-ink-mute">
-          {stepCopy.body}
-        </p>
-
-        {(step === 0 && onOpenImport) || step === 2 ? (
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            {step === 0 && onOpenImport && (
-              <button
-                type="button"
-                onClick={onOpenImport}
-                className="rounded border border-line px-2.5 py-1.5 text-[12px] font-medium hover:border-ink-faint focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+        <div className="cf-tour-steps">
+          {copy.steps.map((stepCopy, i) => {
+            const isActive = i === step;
+            return (
+              <div
+                key={i}
+                className={stepLayerClass(i, step, outgoing, direction, enterReady)}
+                aria-hidden={!isActive}
+                inert={!isActive}
               >
-                Import a schedule
-              </button>
-            )}
-            {step === 2 && (
-              <Link
-                href="/teacher"
-                className="rounded bg-accent px-2.5 py-1.5 text-[12px] font-semibold text-accent-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-              >
-                {copy.openTeacher}
-              </Link>
-            )}
-          </div>
-        ) : null}
+                <h2
+                  id={`${baseId}-title-${i}`}
+                  className="mt-1.5 text-[15px] font-bold leading-snug"
+                >
+                  {stepCopy.title}
+                </h2>
+                <p
+                  id={`${baseId}-body-${i}`}
+                  className="mt-2 text-[13px] leading-relaxed text-ink-mute"
+                >
+                  {stepCopy.body}
+                </p>
+                {i === 0 && onOpenImport ? (
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={onOpenImport}
+                      className="rounded border border-line px-2.5 py-1.5 text-[12px] font-medium hover:border-ink-faint focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+                    >
+                      {copy.importSchedule}
+                    </button>
+                  </div>
+                ) : null}
+                {i === 2 ? (
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <Link
+                      href="/teacher"
+                      className="rounded bg-accent px-2.5 py-1.5 text-[12px] font-semibold text-accent-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+                    >
+                      {copy.openTeacher}
+                    </Link>
+                  </div>
+                ) : null}
+              </div>
+            );
+          })}
+        </div>
 
         <div className="mt-4 border-t border-line-soft pt-3">
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
               disabled={step === 0}
-              onClick={() => setStep((s) => Math.max(0, s - 1))}
+              onClick={() => go(step - 1)}
               className="rounded border border-line px-2.5 py-1.5 text-[12px] font-medium disabled:opacity-40 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
             >
               {copy.back}
@@ -229,7 +320,7 @@ export function ManagerTour({
             {step < 2 ? (
               <button
                 type="button"
-                onClick={() => setStep((s) => Math.min(2, s + 1))}
+                onClick={() => go(step + 1)}
                 className="rounded bg-accent px-2.5 py-1.5 text-[12px] font-semibold text-accent-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
               >
                 {copy.next}
@@ -259,6 +350,14 @@ export function ManagerTour({
             >
               {copy.reset}
             </button>
+            <LocaleToggle
+              locale={locale}
+              onLocale={setLocale}
+              groupLabel={copy.langGroup}
+              enLabel={copy.langEn}
+              viLabel={copy.langVi}
+              className="ml-auto"
+            />
           </div>
         </div>
       </div>
@@ -277,6 +376,8 @@ function TourBackdrop({
   const panelClass = "pointer-events-auto fixed";
   const bg = { backgroundColor: TINT };
   const showHole = target === "lesson-edit" && highlight;
+  const ringClass =
+    "cf-tour-highlight pointer-events-none fixed rounded border-2 border-accent";
 
   if (!showHole) {
     return (
@@ -285,7 +386,7 @@ function TourBackdrop({
         {highlight && (
           <div
             aria-hidden
-            className="pointer-events-none fixed rounded border-2 border-accent transition-all duration-200"
+            className={ringClass}
             style={{
               top: highlight.top,
               left: highlight.left,
@@ -306,7 +407,7 @@ function TourBackdrop({
     <>
       <div
         aria-hidden
-        className="pointer-events-none fixed rounded border-2 border-accent transition-all duration-200"
+        className={ringClass}
         style={{ top, left, width, height }}
       />
       <div className={panelClass} style={{ ...bg, top: 0, left: 0, right: 0, height: top }} />
@@ -317,17 +418,31 @@ function TourBackdrop({
   );
 }
 
+function clampPanelTop(top: number, panelH: number): number {
+  const maxTop = Math.max(8, window.innerHeight - panelH - 8);
+  return Math.min(Math.max(8, top), maxTop);
+}
+
 function positionPanel(
   highlight: { top: number; left: number; width: number; height: number } | null,
-  target: TourTarget
+  target: TourTarget,
+  panelH: number
 ): CSSProperties {
-  if (typeof window === "undefined" || !highlight) {
-    return { top: "50%", left: "50%", transform: "translate(-50%, -50%)" };
+  const panelW =
+    typeof window === "undefined" ? 352 : Math.min(352, window.innerWidth - 16);
+
+  if (typeof window === "undefined") {
+    return { top: 8, left: 8 };
+  }
+
+  if (!highlight) {
+    return {
+      top: clampPanelTop(window.innerHeight / 2 - panelH / 2, panelH),
+      left: Math.max(8, window.innerWidth / 2 - panelW / 2),
+    };
   }
 
   const gap = 12;
-  const panelW = Math.min(352, window.innerWidth - 16);
-  const panelH = 260;
   // Keep clear of the manager filter rail on md+.
   const leftFloor = window.innerWidth >= 768 ? 200 : 8;
 
@@ -336,33 +451,27 @@ function positionPanel(
     const fitsRight = rightOf + panelW <= window.innerWidth - 8;
     if (fitsRight) {
       return {
-        top: Math.min(
-          Math.max(8, highlight.top),
-          window.innerHeight - panelH - 8
-        ),
+        top: clampPanelTop(highlight.top, panelH),
         left: Math.max(leftFloor, rightOf),
       };
     }
     const leftOf = highlight.left - gap - panelW;
     if (leftOf >= leftFloor) {
       return {
-        top: Math.min(
-          Math.max(8, highlight.top),
-          window.innerHeight - panelH - 8
-        ),
+        top: clampPanelTop(highlight.top, panelH),
         left: leftOf,
       };
     }
   }
 
   const preferredTop = highlight.top + highlight.height + gap;
-  const fitsBelow = preferredTop + panelH < window.innerHeight;
+  const fitsBelow = preferredTop + panelH < window.innerHeight - 8;
   const top = fitsBelow
     ? preferredTop
-    : Math.max(8, highlight.top - gap - panelH);
+    : highlight.top - gap - panelH;
   let left = Math.max(leftFloor, highlight.left);
   if (left + panelW > window.innerWidth - 8) {
     left = Math.max(leftFloor, window.innerWidth - panelW - 8);
   }
-  return { top, left };
+  return { top: clampPanelTop(top, panelH), left };
 }

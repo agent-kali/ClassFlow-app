@@ -5,6 +5,8 @@ import type { Lesson } from "@/domain/types";
 import type { Conflict } from "@/domain/conflicts";
 import type { useLookups } from "@/data/hooks";
 import { formatAgendaMin, formatDuration } from "@/domain/time";
+import { useLocale } from "@/features/landing/locale";
+import { getManagerCopy } from "./copy";
 import { accentForSchool, hasOverlapConflict, isLessonPast } from "./lessonCardModel";
 import {
   DAY_BLOCK_HEIGHT,
@@ -50,6 +52,8 @@ export function DayLessonBlock({
   onSelect,
   onDragStart,
 }: Props) {
+  const [locale] = useLocale();
+  const copy = getManagerCopy(locale);
   const { lesson } = block;
   const school = lookups.schoolOfRoom(lesson.roomId);
   const room = lookups.roomsById.get(lesson.roomId);
@@ -73,7 +77,11 @@ export function DayLessonBlock({
   const whereShown = tier === "narrow" ? campusName : where;
 
   const statusKind = hasConflict ? "conflict" : travelConflict ? "travel" : null;
-  const statusText = hasConflict ? "Double booking" : travelConflict ? "Tight travel" : null;
+  const statusText = hasConflict
+    ? copy.doubleBookingCard
+    : travelConflict
+      ? copy.tightTravelShort
+      : null;
   const spellOutStatus = tier === "full" && pxWidth >= TIER_STATUS_PX;
 
   const label =
