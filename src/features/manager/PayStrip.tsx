@@ -7,6 +7,9 @@ import { earningsFor } from "@/domain/earnings";
 import { weekDates } from "@/domain/time";
 import { formatUsd } from "@/domain/money";
 import { MoneyPair } from "@/components/MoneyPair";
+import { useLocale } from "@/features/landing/locale";
+import { getManagerCopy } from "./copy";
+import { managerDateLocale } from "./dateLocale";
 
 /**
  * Money as ambient consequence: every teacher's week pay, always on screen.
@@ -18,6 +21,9 @@ export function PayStrip({ anchorDate }: { anchorDate?: string }) {
   const lessons = useLessons();
   const today = useToday();
   const effect = useLastPayEffect();
+  const [locale] = useLocale();
+  const copy = getManagerCopy(locale);
+  const dateLocale = managerDateLocale(locale);
 
   const days = useMemo(
     () => weekDates(parseISO(anchorDate ?? today)),
@@ -28,14 +34,14 @@ export function PayStrip({ anchorDate }: { anchorDate?: string }) {
   return (
     <footer
       className="pay-strip border-t border-line bg-surface"
-      aria-label="This week's pay by teacher"
+      aria-label={copy.thisWeeksPay}
     >
       <div className="flex min-w-0 items-stretch gap-0 overflow-x-auto">
         <div className="flex shrink-0 flex-col justify-center border-r border-line px-3 py-1.5">
           <span className="text-[10px] font-semibold uppercase tracking-wide text-ink-mute">
-            Pay, week of {format(parseISO(days[0]), "d MMM")}
+            {copy.payWeekOf} {format(parseISO(days[0]), "d MMM", { locale: dateLocale })}
           </span>
-          <span className="text-[10px] text-ink-faint">delivered hours only</span>
+          <span className="text-[10px] text-ink-faint">{copy.deliveredHours}</span>
         </div>
         {teachers.map((t) => {
           const e = earningsFor(t, lessons, range);

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useId, useState } from "react";
+import { LocaleToggle } from "@/components/LocaleToggle";
 import { landingCopy, type LandingCopy } from "./copy";
 import { demoHref, type Locale } from "./locale";
 
@@ -80,27 +81,13 @@ export function LandingNav({
         </nav>
 
         <div className="ml-auto flex shrink-0 items-center gap-2 md:ml-0">
-          <div
-            role="group"
-            aria-label={copy.nav.langGroup}
-            className="flex shrink-0 overflow-hidden rounded border border-line"
-          >
-            {(["en", "vi"] as const).map((code) => (
-              <button
-                key={code}
-                type="button"
-                aria-pressed={locale === code}
-                onClick={() => onLocale(code)}
-                className={`cf-mono w-8 shrink-0 py-1 text-center text-[11px] font-semibold tabular-nums transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
-                  locale === code
-                    ? "bg-accent text-accent-ink"
-                    : "bg-surface text-ink-mute hover:text-ink"
-                }`}
-              >
-                {code === "en" ? copy.nav.langEn : copy.nav.langVi}
-              </button>
-            ))}
-          </div>
+          <LocaleToggle
+            locale={locale}
+            onLocale={onLocale}
+            groupLabel={copy.nav.langGroup}
+            enLabel={copy.nav.langEn}
+            viLabel={copy.nav.langVi}
+          />
 
           <Link
             href={demoHref(locale)}

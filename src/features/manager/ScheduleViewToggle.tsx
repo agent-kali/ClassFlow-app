@@ -1,5 +1,7 @@
 "use client";
 
+import { useLocale } from "@/features/landing/locale";
+import { getManagerCopy } from "./copy";
 import type { ScheduleViewMode } from "./dayViewState";
 
 interface Props {
@@ -8,15 +10,17 @@ interface Props {
   onChange: (mode: ScheduleViewMode) => void;
 }
 
-const MODES: { id: ScheduleViewMode; label: string; hint: string }[] = [
-  { id: "week", label: "Week", hint: "Scan the whole week" },
-  { id: "day", label: "Day", hint: "Inspect one day's exact timing" },
-];
-
 export function ScheduleViewToggle({ mode, disabled = false, onChange }: Props) {
+  const [locale] = useLocale();
+  const copy = getManagerCopy(locale);
+  const modes: { id: ScheduleViewMode; label: string; hint: string }[] = [
+    { id: "week", label: copy.week, hint: copy.weekHint },
+    { id: "day", label: copy.day, hint: copy.dayHint },
+  ];
+
   return (
-    <div className="view-toggle shrink-0" role="group" aria-label="Schedule view">
-      {MODES.map((option) => (
+    <div className="view-toggle shrink-0" role="group" aria-label={copy.viewGroup}>
+      {modes.map((option) => (
         <button
           key={option.id}
           type="button"

@@ -1,6 +1,8 @@
 "use client";
 
-import { useSyncExternalStore } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
+import { useLocale } from "@/features/landing/locale";
+import { getManagerCopy } from "@/features/manager/copy";
 
 function subscribeTheme(onChange: () => void) {
   const root = document.documentElement;
@@ -13,8 +15,36 @@ function getTheme(): "light" | "dark" {
   return document.documentElement.dataset.theme === "dark" ? "dark" : "light";
 }
 
+function readStoredTheme(): "light" | "dark" | null {
+  try {
+    const t = localStorage.getItem("cf-theme");
+    if (t === "dark" || t === "light") return t;
+  } catch {
+    /* ignore */
+  }
+  return null;
+}
+
+function applySystemTheme(dark: boolean) {
+  if (dark) document.documentElement.dataset.theme = "dark";
+  else delete document.documentElement.dataset.theme;
+}
+
 export function ThemeToggle() {
   const theme = useSyncExternalStore(subscribeTheme, getTheme, () => "light");
+  const [followSystem, setFollowSystem] = useState(() => readStoredTheme() === null);
+  const [locale] = useLocale();
+  const copy = getManagerCopy(locale);
+
+  useEffect(() => {
+    if (!followSystem) return;
+    if (readStoredTheme()) return;
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    applySystemTheme(media.matches);
+    const onChange = () => applySystemTheme(media.matches);
+    media.addEventListener("change", onChange);
+    return () => media.removeEventListener("change", onChange);
+  }, [followSystem]);
 
   const toggle = () => {
     const next = theme === "dark" ? "light" : "dark";
@@ -22,7 +52,10 @@ export function ThemeToggle() {
     else delete document.documentElement.dataset.theme;
     try {
       localStorage.setItem("cf-theme", next);
-    } catch {}
+    } catch {
+      /* ignore */
+    }
+    setFollowSystem(false);
   };
 
   const target = theme === "dark" ? "light" : "dark";
@@ -32,10 +65,10 @@ export function ThemeToggle() {
       type="button"
       onClick={toggle}
       className="cf-mono flex shrink-0 items-center gap-1 rounded border border-line px-1.5 py-1 text-[11px] text-ink-mute transition-colors hover:border-ink-faint hover:text-ink sm:gap-1.5 sm:px-2"
-      aria-label={`Switch to ${target} theme`}
+      aria-label={copy.switchToTheme(target)}
     >
       {target === "dark" ? <MoonIcon /> : <SunIcon />}
-      <span className="hidden sm:inline">{target === "dark" ? "Dark" : "Light"}</span>
+      <span className="hidden sm:inline">{target === "dark" ? copy.themeDark : copy.themeLight}</span>
     </button>
   );
 }

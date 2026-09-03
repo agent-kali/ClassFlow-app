@@ -3,6 +3,8 @@
 import { useCampuses, useSchools, useTeachers } from "@/data/hooks";
 import { schoolClass } from "@/components/SchoolChip";
 import { formatUsd } from "@/domain/money";
+import { useLocale } from "@/features/landing/locale";
+import { getManagerCopy } from "./copy";
 import type { ScheduleFilters } from "./filters";
 
 /** "David Okafor" → "David O." so the name fits beside the rate. */
@@ -39,6 +41,8 @@ export function FilterRail({
   const schools = useSchools();
   const campuses = useCampuses();
   const teachers = useTeachers();
+  const [locale] = useLocale();
+  const copy = getManagerCopy(locale);
   const hasTeacherSelection = filters.teacherIds.size > 0;
   const allTeachersSelected =
     teachers.length > 0 &&
@@ -50,7 +54,7 @@ export function FilterRail({
       {mobileOpen && (
         <button
           type="button"
-          aria-label="Close filters"
+          aria-label={copy.closeFilters}
           onClick={onMobileClose}
           className="fixed inset-0 z-30 bg-black/30 md:hidden"
         />
@@ -64,7 +68,7 @@ export function FilterRail({
       <div>
         <div className="mb-1.5 flex items-baseline justify-between">
           <h2 className="text-[11px] font-semibold uppercase tracking-wide text-ink-mute">
-            Schools
+            {copy.schools}
           </h2>
           {isActive && (
             <button
@@ -72,7 +76,7 @@ export function FilterRail({
               onClick={clear}
               className="text-[11px] text-accent hover:underline"
             >
-              Show all
+              {copy.showAll}
             </button>
           )}
         </div>
@@ -130,7 +134,7 @@ export function FilterRail({
       <div>
         <div className="mb-1.5 flex items-baseline justify-between">
           <h2 className="text-[11px] font-semibold uppercase tracking-wide text-ink-mute">
-            Teachers
+            {copy.teachers}
           </h2>
           <button
             type="button"
@@ -140,7 +144,7 @@ export function FilterRail({
             disabled={teachers.length === 0}
             className="text-[11px] text-accent hover:underline disabled:cursor-not-allowed disabled:text-ink-faint disabled:no-underline"
           >
-            {hasTeacherSelection ? "Clear" : "Select all"}
+            {hasTeacherSelection ? copy.clear : copy.selectAll}
           </button>
         </div>
         <ul className="flex flex-col gap-0.5">

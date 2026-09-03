@@ -3,6 +3,8 @@
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { addDays, format, parseISO } from "date-fns";
 import { TopBar } from "@/components/TopBar";
+import { useLocale } from "@/features/landing/locale";
+import { managerDateLocale } from "@/features/manager/dateLocale";
 import { ClientOnly } from "@/components/ClientOnly";
 import {
   useConflicts,
@@ -70,6 +72,8 @@ interface EditFlash {
 }
 
 function ManagerScreen() {
+  const [locale] = useLocale();
+  const dateLocale = managerDateLocale(locale);
   const lessons = useLessons();
   const today = useToday();
   const lookups = useLookups();
@@ -142,10 +146,10 @@ function ManagerScreen() {
       setOverlapFocusState(null);
     }
     setTourStep(step);
-  }, []);
+  }, [setOverlapFocusState, setSelection, setTourStep]);
 
-  const weekLabel = `${format(parseISO(days[0]), "d MMM")} – ${format(parseISO(days[6]), "d MMM yyyy")}`;
-  const weekLabelCompact = `${format(parseISO(days[0]), "d")}–${format(parseISO(days[6]), "d MMM yyyy")}`;
+  const weekLabel = `${format(parseISO(days[0]), "d MMM", { locale: dateLocale })} – ${format(parseISO(days[6]), "d MMM yyyy", { locale: dateLocale })}`;
+  const weekLabelCompact = `${format(parseISO(days[0]), "d")}–${format(parseISO(days[6]), "d MMM yyyy", { locale: dateLocale })}`;
   const isCurrentWeek = days.includes(today);
   const shiftWeek = (weeks: number) =>
     setAnchorDate(toIsoDate(addDays(mondayOf(parseISO(anchorDate)), weeks * 7)));
@@ -154,8 +158,8 @@ function ManagerScreen() {
   // the week agenda — either one keeps the schedule in Week View.
   const canUseDayView = !isNarrow && !tourActive;
   const mode: ScheduleViewMode = canUseDayView ? viewMode : "week";
-  const dayLabel = format(parseISO(dayDate), "EEE d MMM yyyy");
-  const dayLabelCompact = format(parseISO(dayDate), "EEE d MMM");
+  const dayLabel = format(parseISO(dayDate), "EEE d MMM yyyy", { locale: dateLocale });
+  const dayLabelCompact = format(parseISO(dayDate), "EEE d MMM", { locale: dateLocale });
   /** Focus belongs to the day it was set on, so changing date drops it. */
   const activeDayFocus = dayFocus && dayFocus.date === dayDate ? dayFocus : null;
 

@@ -8,6 +8,10 @@ export interface TourCopy {
   reset: string;
   finish: string;
   openTeacher: string;
+  importSchedule: string;
+  langGroup: string;
+  langEn: string;
+  langVi: string;
   steps: [
     { title: string; body: string },
     { title: string; body: string },
@@ -23,6 +27,10 @@ const en: TourCopy = {
   reset: "Reset demo",
   finish: "Done",
   openTeacher: "Open teacher view",
+  importSchedule: "Import a schedule",
+  langGroup: "Language",
+  langEn: "EN",
+  langVi: "VI",
   steps: [
     {
       title: "Import inconsistent school data",
@@ -47,6 +55,10 @@ const vi: TourCopy = {
   reset: "Đặt lại demo",
   finish: "Xong",
   openTeacher: "Mở góc giáo viên",
+  importSchedule: "Nhập lịch học",
+  langGroup: "Ngôn ngữ",
+  langEn: "EN",
+  langVi: "VI",
   steps: [
     {
       title: "Nhập dữ liệu trường không đồng nhất",

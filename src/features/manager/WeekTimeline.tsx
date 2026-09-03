@@ -2,6 +2,9 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { format, parseISO } from "date-fns";
+import { useLocale } from "@/features/landing/locale";
+import { getManagerCopy } from "./copy";
+import { managerDateLocale } from "./dateLocale";
 import type { Lesson } from "@/domain/types";
 import type { Conflict } from "@/domain/conflicts";
 import type { useLookups } from "@/data/hooks";
@@ -146,6 +149,9 @@ export function WeekTimeline({
   onSelectLesson,
   onMoveLesson,
 }: Props) {
+  const [locale] = useLocale();
+  const copy = getManagerCopy(locale);
+  const dateLocale = managerDateLocale(locale);
   const days = useMemo(() => weekDates(parseISO(anchorDate)), [anchorDate]);
   const now = useNowMinute();
   const isNarrow = useIsNarrow();
@@ -348,7 +354,7 @@ export function WeekTimeline({
         >
           {lessonCount === 0 && (
             <div className="week-agenda__empty" aria-hidden={!!drag}>
-              No lessons
+              {copy.noLessons}
             </div>
           )}
 
@@ -356,7 +362,9 @@ export function WeekTimeline({
             if (row.kind === "period") {
               return (
                 <div key={`${date}-${row.label}`} className="week-agenda__period" aria-hidden>
-                  <span className="week-agenda__period-label">{row.label}</span>
+                  <span className="week-agenda__period-label">
+                    {row.label === "AFTERNOON" ? copy.afternoon : copy.evening}
+                  </span>
                 </div>
               );
             }
@@ -417,12 +425,12 @@ export function WeekTimeline({
       ref={scrollerRef}
       className="week-agenda flex-1 overflow-auto"
       role="region"
-      aria-label="Week schedule"
+      aria-label={copy.weekSchedule}
       data-overlap-focus={focusedOverlapKey ?? undefined}
     >
       <div className="week-agenda__board">
         {isNarrow ? (
-          <div className="week-agenda__mobile-nav" role="tablist" aria-label="Day">
+          <div className="week-agenda__mobile-nav" role="tablist" aria-label={copy.dayOfWeek}>
             {days.map((date, i) => {
               const d = parseISO(date);
               const isToday = date === today;
@@ -438,7 +446,7 @@ export function WeekTimeline({
                   onClick={() => setMobileDay({ key: weekTodayKey, index: i })}
                 >
                   <span className="cf-mono text-[11px] font-semibold uppercase">
-                    {format(d, "EEE")}
+                    {format(d, "EEE", { locale: dateLocale })}
                   </span>
                   <span className="cf-mono text-[10px]">{format(d, "dd/MM")}</span>
                   {count > 0 && <span className="week-agenda__day-count">{count}</span>}
@@ -460,7 +468,7 @@ export function WeekTimeline({
                   <span
                     className={`cf-mono text-[11px] font-semibold uppercase ${isToday ? "text-accent" : "text-ink-mute"}`}
                   >
-                    {format(d, "EEE")}
+                    {format(d, "EEE", { locale: dateLocale })}
                   </span>
                   <span
                     className={`cf-mono ml-1.5 text-[11px] ${isToday ? "text-accent" : "text-ink-faint"}`}

@@ -1,6 +1,8 @@
 "use client";
 
 import { badgeClassName } from "@/components/Badge";
+import { useLocale } from "@/features/landing/locale";
+import { getManagerCopy } from "./copy";
 import { ScheduleViewToggle } from "./ScheduleViewToggle";
 import type { ScheduleViewMode } from "./dayViewState";
 
@@ -53,9 +55,11 @@ export function ScheduleToolbar({
   onOpenImport,
   onNewLesson,
 }: Props) {
-  const stepBackLabel = mode === "day" ? "Previous day" : "Previous week";
-  const stepForwardLabel = mode === "day" ? "Next day" : "Next week";
-  const nowLabel = mode === "day" ? "Today" : "This week";
+  const [locale] = useLocale();
+  const copy = getManagerCopy(locale);
+  const stepBackLabel = mode === "day" ? copy.previousDay : copy.previousWeek;
+  const stepForwardLabel = mode === "day" ? copy.nextDay : copy.nextWeek;
+  const nowLabel = mode === "day" ? copy.today : copy.thisWeek;
 
   return (
     <div className="schedule-toolbar">
@@ -106,13 +110,13 @@ export function ScheduleToolbar({
             })}
             aria-label={
               overlapCount === 1
-                ? "Show double-booking on the schedule"
+                ? copy.ariaShowDoubleBooking
                 : overlapCursor === null
-                  ? `Show first of ${overlapCount} double-bookings`
-                  : `Show next double-booking, currently ${overlapCursor + 1} of ${overlapCount}`
+                  ? copy.ariaShowFirstDoubleBookings(overlapCount)
+                  : copy.ariaShowNextDoubleBooking(overlapCursor + 1, overlapCount)
             }
           >
-            {overlapCount} double-booking{overlapCount > 1 ? "s" : ""}
+            {overlapCount} {overlapCount === 1 ? copy.doubleBooking : copy.doubleBookings}
             {overlapCursor !== null && overlapCount > 1
               ? ` · ${overlapCursor + 1}/${overlapCount}`
               : ""}
@@ -131,24 +135,24 @@ export function ScheduleToolbar({
             })}
             aria-label={
               travelCount === 1
-                ? "Show tight travel gap on the schedule"
+                ? copy.ariaShowTravelGap
                 : travelCursor === null
-                  ? `Show first of ${travelCount} tight travel gaps`
-                  : `Show next tight travel gap, currently ${travelCursor + 1} of ${travelCount}`
+                  ? copy.ariaShowFirstTravelGaps(travelCount)
+                  : copy.ariaShowNextTravelGap(travelCursor + 1, travelCount)
             }
           >
-            {travelCount} tight travel gap{travelCount > 1 ? "s" : ""}
+            {travelCount} {travelCount === 1 ? copy.travelGap : copy.travelGaps}
             {travelCursor !== null && travelCount > 1
               ? ` · ${travelCursor + 1}/${travelCount}`
               : ""}
           </button>
         )}
         {overlapCount === 0 && travelCount === 0 && (
-          <span className="schedule-toolbar__no-conflicts cf-mono">No conflicts</span>
+          <span className="schedule-toolbar__no-conflicts cf-mono">{copy.noConflicts}</span>
         )}
         {showClearFocus && (
           <button type="button" onClick={onClearFocus} className="schedule-toolbar__clear">
-            Clear focus
+            {copy.clearFocus}
           </button>
         )}
       </div>
@@ -159,24 +163,24 @@ export function ScheduleToolbar({
           onClick={onOpenFilters}
           className="schedule-toolbar__filters md:hidden"
         >
-          Filters
+          {copy.filters}
         </button>
         <button
           type="button"
           data-tour="import"
           onClick={onOpenImport}
-          aria-label="Import a schedule"
+          aria-label={copy.importSchedule}
           className="schedule-toolbar__import"
         >
-          <span className="schedule-toolbar__import-full">Import a schedule</span>
-          <span className="schedule-toolbar__import-short">Import</span>
+          <span className="schedule-toolbar__import-full">{copy.importSchedule}</span>
+          <span className="schedule-toolbar__import-short">{copy.importShort}</span>
         </button>
         <button
           type="button"
           onClick={onNewLesson}
           className="schedule-toolbar__new"
         >
-          New lesson
+          {copy.newLesson}
         </button>
       </div>
     </div>

@@ -5,6 +5,8 @@ import type { Lesson } from "@/domain/types";
 import type { Conflict } from "@/domain/conflicts";
 import type { useLookups } from "@/data/hooks";
 import { formatAgendaMin } from "@/domain/time";
+import { useLocale } from "@/features/landing/locale";
+import { getManagerCopy } from "./copy";
 import { accentForSchool, hasOverlapConflict, isLessonPast } from "./lessonCardModel";
 
 interface Props {
@@ -40,6 +42,8 @@ export function LessonBlock({
   onSelect,
   onDragStart,
 }: Props) {
+  const [locale] = useLocale();
+  const copy = getManagerCopy(locale);
   const school = lookups.schoolOfRoom(lesson.roomId);
   const room = lookups.roomsById.get(lesson.roomId);
   const campus = lookups.campusOfRoom(lesson.roomId);
@@ -67,9 +71,9 @@ export function LessonBlock({
 
   const statusKind = hasConflict ? "conflict" : travelConflict ? "travel" : null;
   const statusText = hasConflict
-    ? "Double booking"
+    ? copy.doubleBookingCard
     : travelConflict
-      ? `Tight travel (${travelConflict.gapMin} min)`
+      ? copy.tightTravelCard(travelConflict.gapMin)
       : null;
 
   return (

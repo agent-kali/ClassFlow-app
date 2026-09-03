@@ -333,6 +333,81 @@ select,
   }
 }
 
+/* Tour: stacked step layers + highlight/panel position easing. */
+.cf-tour-steps {
+  display: grid;
+}
+.cf-tour-step {
+  grid-column: 1;
+  grid-row: 1;
+  transition:
+    opacity 280ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 280ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.cf-tour-step--active {
+  z-index: 2;
+  opacity: 1;
+  pointer-events: auto;
+  transform: translate3d(0, 0, 0);
+}
+.cf-tour-step--inactive {
+  z-index: 0;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate3d(0, 0, 0);
+}
+.cf-tour-step--enter-forward {
+  z-index: 2;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate3d(10px, 0, 0);
+  /* Instant start offset; --active then eases to 0. A transition here would
+     interpolate from --inactive (0) instead of starting at +10px. */
+  transition: none;
+}
+.cf-tour-step--enter-back {
+  z-index: 2;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate3d(-10px, 0, 0);
+  transition: none;
+}
+.cf-tour-step--exit-forward {
+  z-index: 1;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate3d(-10px, 0, 0);
+}
+.cf-tour-step--exit-back {
+  z-index: 1;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate3d(10px, 0, 0);
+}
+.cf-tour-highlight {
+  transition:
+    top 240ms cubic-bezier(0.22, 1, 0.36, 1),
+    left 240ms cubic-bezier(0.22, 1, 0.36, 1),
+    width 240ms cubic-bezier(0.22, 1, 0.36, 1),
+    height 240ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.cf-tour-panel--ready {
+  transition:
+    top 240ms cubic-bezier(0.22, 1, 0.36, 1),
+    left 240ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cf-tour-step {
+    transform: translate3d(0, 0, 0) !important;
+    transition: opacity 0.01ms;
+  }
+  .cf-tour-highlight,
+  .cf-tour-panel--ready {
+    transition-duration: 0.01ms;
+  }
+}
+
 ::selection {
   background: var(--accent);
   color: var(--accent-ink);
