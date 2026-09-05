@@ -1,0 +1,430 @@
+/*
+ * Teacher dashboard.
+ * The teacher never edits, so this screen has its own row and panel
+ * primitives rather than the manager's interactive .cf-card affordances.
+ * Bounded shell, compact rows, and one 312px earnings column on desktop.
+ */
+.teacher-shell {
+  width: 100%;
+  max-width: 1120px;
+  margin-inline: auto;
+}
+
+.teacher-identity {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px 12px;
+  margin-bottom: 12px;
+}
+.teacher-identity__demo {
+  flex-shrink: 0;
+}
+
+.teacher-banner-slot {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--ground);
+  padding-bottom: 8px;
+}
+
+.teacher-next {
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--line));
+  background: color-mix(in srgb, var(--accent-soft) 55%, var(--surface-raised));
+  border-radius: 8px;
+  padding: 10px 14px;
+}
+.teacher-next__lead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 8px;
+}
+.teacher-next__kicker {
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--accent);
+}
+.teacher-next__wait {
+  font-size: 14px;
+  color: var(--ink-mute);
+}
+.teacher-next__time {
+  margin-top: 2px;
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.teacher-next__date {
+  margin-right: 6px;
+  color: var(--ink-mute);
+}
+.teacher-next__summary {
+  margin-top: 4px;
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--ink-mute);
+  overflow-wrap: break-word;
+}
+
+.teacher-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+}
+@media (min-width: 1024px) {
+  .teacher-grid {
+    grid-template-columns: minmax(0, 1fr) 312px;
+    grid-template-areas:
+      "nav aside"
+      "stream aside";
+    align-items: start;
+    column-gap: 24px;
+    row-gap: 16px;
+  }
+  .teacher-grid__nav {
+    grid-area: nav;
+  }
+  .teacher-grid__aside {
+    grid-area: aside;
+    position: sticky;
+    top: calc(var(--teacher-sticky, 0px) + 16px);
+  }
+  .teacher-grid__stream {
+    grid-area: stream;
+  }
+}
+
+.teacher-stream__header {
+  margin-bottom: 10px;
+}
+
+.teacher-day {
+  margin-top: 14px;
+  scroll-margin-top: calc(var(--teacher-sticky, 0px) + 8px);
+}
+.teacher-day:first-child {
+  margin-top: 0;
+}
+.teacher-day__heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.teacher-day__list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.teacher-day__empty {
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 13px;
+  color: var(--ink-mute);
+}
+
+.teacher-week + .teacher-week {
+  border-top: 1px solid var(--line-soft);
+}
+.teacher-week__toggle {
+  display: flex;
+  width: 100%;
+  align-items: baseline;
+  gap: 8px;
+  padding: 10px 2px;
+  text-align: left;
+}
+.teacher-week__toggle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+.teacher-week__chevron {
+  font-size: 11px;
+  color: var(--ink-mute);
+}
+.teacher-week__label {
+  font-size: 15px;
+  font-weight: 600;
+}
+.teacher-week__meta {
+  margin-left: auto;
+  font-size: 13px;
+  color: var(--ink-mute);
+}
+.teacher-week__panel {
+  padding-bottom: 12px;
+}
+
+/*
+ * Lesson row: three labelled zones. Time and pay are fixed-width on desktop
+ * with hairline dividers; type never shrinks on a narrow screen — the grid
+ * stacks into bands instead.
+ */
+.teacher-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas:
+    "time"
+    "body"
+    "aside";
+  align-items: start;
+  row-gap: 8px;
+  border: 1px solid var(--line-soft);
+  border-left: 3px solid var(--school, var(--line));
+  border-radius: 8px;
+  background: var(--surface-raised);
+  padding: 12px 14px;
+}
+@media (min-width: 600px) {
+  .teacher-row {
+    grid-template-columns: 8.4375rem minmax(0, 1fr) 8.75rem;
+    grid-template-areas: "time body aside";
+    column-gap: 0;
+    row-gap: 0;
+    padding: 10px 0;
+  }
+}
+.teacher-row__time {
+  grid-area: time;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+@media (min-width: 600px) {
+  .teacher-row__time {
+    padding: 0 10px 0 12px;
+    border-right: 1px solid var(--line-soft);
+  }
+}
+.teacher-row__start {
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--ink);
+  white-space: nowrap;
+}
+.teacher-row__duration {
+  font-size: 14px;
+  color: var(--ink-mute);
+}
+.teacher-row__body {
+  grid-area: body;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+@media (min-width: 600px) {
+  .teacher-row__body {
+    padding: 0 14px;
+  }
+}
+.teacher-row__title {
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.3;
+  color: var(--ink);
+}
+.teacher-row__class {
+  font-size: 14px;
+  line-height: 1.35;
+  color: var(--ink-mute);
+}
+.teacher-row__detail {
+  font-size: 15px;
+  line-height: 1.4;
+  color: var(--ink);
+}
+.teacher-row__where {
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--ink-mute);
+}
+.teacher-row__aux,
+.teacher-row__moved {
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--ink-mute);
+}
+.teacher-row__aside {
+  grid-area: aside;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+@media (min-width: 600px) {
+  .teacher-row__aside {
+    align-items: flex-end;
+    padding: 0 14px 0 14px;
+    border-left: 1px solid var(--line-soft);
+  }
+}
+@media (max-width: 599px) {
+  .teacher-row__aside {
+    padding-top: 8px;
+    border-top: 1px solid var(--line-soft);
+    flex-direction: row;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+  }
+}
+.teacher-row__status {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: lowercase;
+  color: var(--ink);
+}
+.teacher-row__status--now {
+  color: var(--accent);
+}
+.teacher-row__status--delivered {
+  color: var(--ok);
+}
+.teacher-row__status--cancelled {
+  color: var(--danger);
+}
+.teacher-row__status--scheduled {
+  font-weight: 600;
+  color: var(--ink);
+}
+.teacher-row__pay {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  line-height: 1.25;
+}
+@media (max-width: 599px) {
+  .teacher-row__pay {
+    margin-left: auto;
+  }
+}
+.teacher-row__usd {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.teacher-row__vnd {
+  font-size: 14px;
+  color: var(--ink-mute);
+}
+.teacher-row__unpaid {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--danger);
+}
+
+.teacher-row[data-now="true"] {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+  border-left-color: var(--accent);
+  background: color-mix(in srgb, var(--accent-soft) 35%, var(--surface-raised));
+}
+.teacher-row[data-cancelled="true"] {
+  background: var(--surface);
+  border-left-color: var(--line);
+}
+.teacher-row[data-cancelled="true"] .teacher-row__start,
+.teacher-row[data-cancelled="true"] .teacher-row__usd {
+  text-decoration: line-through;
+  text-decoration-color: color-mix(in srgb, var(--danger) 60%, transparent);
+}
+
+.teacher-earnings {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-raised);
+  padding: 14px 16px;
+}
+.teacher-earnings__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.teacher-earnings__help {
+  display: flex;
+  height: 24px;
+  width: 24px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--ink-mute);
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+.teacher-earnings__help:hover {
+  color: var(--ink);
+  border-color: var(--ink-faint);
+}
+.teacher-earnings__help:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.teacher-earnings__label {
+  margin-top: 12px;
+  font-size: 13px;
+  color: var(--ink-mute);
+}
+.teacher-earnings__earned {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 8px;
+}
+.teacher-earnings__usd {
+  font-size: 26px;
+  font-weight: 600;
+  line-height: 1.15;
+}
+.teacher-earnings__vnd {
+  font-size: 14px;
+  color: var(--ink-mute);
+}
+.teacher-earnings__facts {
+  margin-top: 10px;
+  border-top: 1px solid var(--line-soft);
+}
+.teacher-earnings__facts > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid var(--line-soft);
+  padding: 6px 0;
+}
+.teacher-earnings__facts > div:last-child {
+  border-bottom: 0;
+}
+.teacher-earnings__facts dt {
+  font-size: 13px;
+  color: var(--ink-mute);
+}
+.teacher-earnings__facts dd {
+  min-width: 0;
+  font-size: 14px;
+  text-align: right;
+}
+.teacher-earnings__facts dd > span {
+  display: block;
+  font-size: 13px;
+  color: var(--ink-mute);
+}
+.teacher-earnings__fx {
+  margin-top: 8px;
+  font-size: 13px;
+  color: var(--ink-faint);
+}

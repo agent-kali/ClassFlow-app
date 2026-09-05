@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "../features/teacher/teacher.css";
 
 /*
  * ClassFlow design tokens — "the ledger and the timetable".
