@@ -6,15 +6,45 @@ import { lessonHours } from "@/domain/types";
 import type { useFxRate, useLookups } from "@/data/hooks";
 import { formatDuration, formatMin, formatRange } from "@/domain/time";
 import { formatUsd, formatVnd, usdToVnd } from "@/domain/money";
-import { Badge, schoolClass } from "@/components/Badge";
-import { SchoolChip } from "@/components/SchoolChip";
+import { schoolClass } from "@/components/Badge";
+import {
+  formatClassIdentity,
+  formatCoTeacher,
+  formatCurriculum,
+  formatLocation,
+  formatWeekCode,
+} from "./lessonPresentation";
 
 const DAY_HEADING = "EEE d MMM";
 
+function statusWord({
+  isOff,
+  isNow,
+  isNext,
+  isPast,
+  status,
+}: {
+  isOff: boolean;
+  isNow: boolean;
+  isNext: boolean;
+  isPast: boolean;
+  status: Lesson["status"];
+}): { label: string; tone: "now" | "delivered" | "cancelled" | "scheduled" } {
+  if (isOff) {
+    return {
+      label: status === "cancelled" ? "cancelled" : "no-show",
+      tone: "cancelled",
+    };
+  }
+  if (isNow) return { label: "now", tone: "now" };
+  if (isNext) return { label: "next", tone: "now" };
+  if (isPast) return { label: "delivered", tone: "delivered" };
+  return { label: "scheduled", tone: "scheduled" };
+}
+
 /**
- * One lesson as a compact row, not a card. Metadata is layered by priority so
- * narrow widths wrap instead of shrinking: time / class / status / pay stay
- * primary, curriculum and location follow, codes and moves come last.
+ * One lesson as three labelled zones: when, what, and pay. Codes and campus
+ * names are never shown raw — each value carries a word that says what it is.
  */
 export function LessonRow({
   lesson,
@@ -41,6 +71,24 @@ export function LessonRow({
   const isOff = lesson.status !== "scheduled";
   const usd = lessonHours(lesson) * teacher.usdRate;
   const durationMin = lesson.endMin - lesson.startMin;
+  const identity = formatClassIdentity(group);
+  const curriculum = formatCurriculum(lesson.curriculum);
+  const location = formatLocation({
+    schoolName: school?.name,
+    campusName: campus?.name,
+    roomName: room?.name,
+  });
+  const week = formatWeekCode(lesson.weekCode);
+  const coTeacher = formatCoTeacher(lesson.cmName);
+  const status = statusWord({
+    isOff,
+    isNow,
+    isNext,
+    isPast,
+    status: lesson.status,
+  });
+  const identityLine = [identity.classLabel, identity.level].filter(Boolean).join(" · ");
+  const syllabusLine = [week, coTeacher].filter(Boolean).join(" · ");
 
   return (
     <li
@@ -56,49 +104,22 @@ export function LessonRow({
       </p>
 
       <div className="teacher-row__body">
-        <p className="teacher-row__title">
-          {group?.program}
-          <span className="teacher-row__class cf-mono">{group?.code}</span>
-        </p>
-        <p className="teacher-row__detail">{lesson.curriculum}</p>
-        <p className="teacher-row__where">
-          Room {room?.name} · {campus?.name}
-          <SchoolChip school={school} />
-        </p>
-        <p className="teacher-row__aux">
-          {lesson.weekCode && <span className="cf-mono">{lesson.weekCode}</span>}
-          {lesson.cmName && <span>CM {lesson.cmName}</span>}
-          {lesson.movedFrom && !isOff && (
-            <span>
-              Moved from {format(parseISO(lesson.movedFrom.date), DAY_HEADING)} at{" "}
-              {formatMin(lesson.movedFrom.startMin)}
-            </span>
-          )}
-        </p>
+        {identity.program && <p className="teacher-row__title">{identity.program}</p>}
+        {identityLine && <p className="teacher-row__class">{identityLine}</p>}
+        {curriculum && <p className="teacher-row__detail">{curriculum}</p>}
+        {location && <p className="teacher-row__where">{location}</p>}
+        {syllabusLine && <p className="teacher-row__aux">{syllabusLine}</p>}
+        {lesson.movedFrom && !isOff && (
+          <p className="teacher-row__moved">
+            Moved from {format(parseISO(lesson.movedFrom.date), DAY_HEADING)} at{" "}
+            {formatMin(lesson.movedFrom.startMin)}
+          </p>
+        )}
       </div>
 
       <div className="teacher-row__aside">
-        <span className="teacher-row__status">
-          {isNow && !isOff && (
-            <Badge size="md" tone="planned">
-              now
-            </Badge>
-          )}
-          {isNext && !isNow && !isOff && (
-            <Badge size="md" tone="planned">
-              next
-            </Badge>
-          )}
-          {isPast && !isOff && !isNow && (
-            <Badge size="md" tone="delivered">
-              delivered
-            </Badge>
-          )}
-          {isOff && (
-            <Badge size="md" tone="cancelled">
-              {lesson.status === "cancelled" ? "cancelled" : "no-show"}
-            </Badge>
-          )}
+        <span className={`teacher-row__status teacher-row__status--${status.tone}`}>
+          {status.label}
         </span>
         <span className="teacher-row__pay cf-mono">
           <span className="teacher-row__usd">{formatUsd(usd)}</span>
