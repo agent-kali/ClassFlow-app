@@ -39,6 +39,27 @@ export function shiftPeriodAnchor(mode: PeriodMode, anchor: string, delta: numbe
   return toIsoDate(addMonths(d, delta));
 }
 
+/**
+ * Monday of the week month-view should open by default: today's week when
+ * today falls in the browsed range, otherwise the week of the period anchor.
+ */
+export function focusedWeekStart(today: string, range: PeriodRange, anchor: string): string {
+  const inRange = today >= range.from && today <= range.to;
+  return weekDates(parseISO(inRange ? today : anchor))[0];
+}
+
+/**
+ * Manual expand/collapse wins over the focused-week default, including an
+ * explicit `false` that collapses the focused week.
+ */
+export function isWeekOpen(
+  weekStart: string,
+  focusWeek: string,
+  overrides: Record<string, boolean>
+): boolean {
+  return overrides[weekStart] ?? weekStart === focusWeek;
+}
+
 /** Compact inclusive range: "6–12 Jul", or "28 Jun – 4 Jul" when months differ. */
 export function formatRangeLabel(from: string, to: string): string {
   const start = parseISO(from);

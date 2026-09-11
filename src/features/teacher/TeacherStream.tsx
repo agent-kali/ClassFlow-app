@@ -9,7 +9,13 @@ import { useFxRate, useLessons, useLookups } from "@/data/hooks";
 import { formatDuration, weekDates } from "@/domain/time";
 import { Badge } from "@/components/Badge";
 import { LessonRow } from "./LessonRow";
-import { formatRangeLabel, type PeriodMode, type PeriodRange } from "./period";
+import {
+  focusedWeekStart,
+  formatRangeLabel,
+  isWeekOpen,
+  type PeriodMode,
+  type PeriodRange,
+} from "./period";
 import { countTeacherStream, formatTeacherStreamSubline } from "./streamSummary";
 
 const DAY_HEADING = "EEE d MMM";
@@ -92,8 +98,8 @@ export function TeacherStream({
   }, [days]);
 
   const focusWeek = useMemo(
-    () => weekDates(parseISO(todayInRange ? today : anchor))[0],
-    [todayInRange, today, anchor]
+    () => focusedWeekStart(today, range, anchor),
+    [today, range, anchor]
   );
 
   // Manual expansions belong to one scope; changing scope drops them without
@@ -177,7 +183,7 @@ export function TeacherStream({
       {mode === "week"
         ? days.map(renderDay)
         : weeks.map((week) => {
-            const open = openWeeks[week.start] ?? week.start === focusWeek;
+            const open = isWeekOpen(week.start, focusWeek, openWeeks);
             const weekLessons = week.days.flatMap(([, l]) => l);
             const payable = weekLessons.filter(isPayable);
             const minutes = payable.reduce((sum, l) => sum + lessonHours(l) * 60, 0);
