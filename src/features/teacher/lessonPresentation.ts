@@ -79,7 +79,7 @@ export function formatLocation(parts: {
 
 export function formatCoTeacher(cmName: string | undefined | null): string | null {
   const name = cmName?.trim();
-  return name ? `Co-teacher ${name}` : null;
+  return name ? `CM ${name}` : null;
 }
 
 /** Compact operational line for the next-up banner. */

@@ -106,8 +106,8 @@ describe("formatLocation", () => {
 });
 
 describe("formatCoTeacher", () => {
-  it("labels the co-teacher initials", () => {
-    expect(formatCoTeacher("DHT")).toBe("Co-teacher DHT");
+  it("labels the class manager initials", () => {
+    expect(formatCoTeacher("DHT")).toBe("CM DHT");
   });
 });
 
