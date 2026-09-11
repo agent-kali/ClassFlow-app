@@ -34,3 +34,32 @@ def test_alembic_downgrade_sql_drops_teachers() -> None:
     result = _alembic("downgrade", "head:base", "--sql")
     assert result.returncode == 0, result.stderr
     assert "drop table teachers" in result.stdout.lower()
+
+
+def test_alembic_upgrade_sql_creates_schedule_hierarchy() -> None:
+    result = _alembic("upgrade", "head", "--sql")
+    assert result.returncode == 0, result.stderr
+    sql = result.stdout.lower()
+    assert "create table schools" in sql
+    assert "create table campuses" in sql
+    assert "create table rooms" in sql
+    assert "create table class_groups" in sql
+    assert "uq_schools_short_name" in sql
+    assert "ck_schools_color" in sql
+    assert "uq_campuses_school_id_name" in sql
+    assert "fk_campuses_school_id" in sql
+    assert "uq_rooms_campus_id_name" in sql
+    assert "fk_rooms_campus_id" in sql
+    assert "uq_class_groups_school_id_code" in sql
+    assert "fk_class_groups_school_id" in sql
+
+
+def test_alembic_downgrade_sql_drops_schedule_hierarchy() -> None:
+    result = _alembic("downgrade", "head:base", "--sql")
+    assert result.returncode == 0, result.stderr
+    sql = result.stdout.lower()
+    assert "drop table class_groups" in sql
+    assert "drop table rooms" in sql
+    assert "drop table campuses" in sql
+    assert "drop table schools" in sql
+    assert "drop table teachers" in sql
