@@ -3,7 +3,13 @@ from logging.config import fileConfig
 from alembic import context
 
 from app.db import Base, get_database_url, get_engine
-from app.models import TeacherModel  # noqa: F401  register teachers on metadata
+from app.models import (  # noqa: F401  register ORM tables on metadata
+    CampusModel,
+    ClassGroupModel,
+    RoomModel,
+    SchoolModel,
+    TeacherModel,
+)
 
 config = context.config
 

@@ -29,6 +29,13 @@ class TeacherCategory(str, Enum):
     esl = "esl"
 
 
+class SchoolColor(str, Enum):
+    teal = "teal"
+    amber = "amber"
+    plum = "plum"
+    moss = "moss"
+
+
 class Teacher(BaseModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
