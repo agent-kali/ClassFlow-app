@@ -1,5 +1,58 @@
+import { parseISO } from "date-fns";
 import { lessonHasEnded, type Instant } from "@/domain/earnings";
 import { isPayable, type Lesson } from "@/domain/types";
+
+type Timed = Pick<Lesson, "status" | "date" | "startMin" | "endMin">;
+
+export interface OperationalLesson<T> {
+  lesson: T;
+  happeningNow: boolean;
+}
+
+function startsBefore(a: Timed, b: Timed): boolean {
+  return a.date < b.date || (a.date === b.date && a.startMin < b.startMin);
+}
+
+/**
+ * The teacher's real next obligation: the payable lesson in progress right
+ * now, else the earliest payable lesson still ahead of `asOf`. Deliberately
+ * searches the teacher's whole lesson set — browsing another week or month
+ * must never replace or hide it. Cancelled and no-show never qualify.
+ */
+export function findOperationalLesson<T extends Timed>(
+  lessons: T[],
+  asOf: Instant
+): OperationalLesson<T> | null {
+  let now: T | undefined;
+  let next: T | undefined;
+  for (const lesson of lessons) {
+    if (!isPayable(lesson)) continue;
+    if (
+      lesson.date === asOf.date &&
+      asOf.min >= lesson.startMin &&
+      asOf.min < lesson.endMin
+    ) {
+      if (!now || startsBefore(lesson, now)) now = lesson;
+      continue;
+    }
+    if (
+      lesson.date > asOf.date ||
+      (lesson.date === asOf.date && lesson.startMin > asOf.min)
+    ) {
+      if (!next || startsBefore(lesson, next)) next = lesson;
+    }
+  }
+  if (now) return { lesson: now, happeningNow: true };
+  return next ? { lesson: next, happeningNow: false } : null;
+}
+
+/** Whole minutes from `asOf` until the lesson starts; never negative. */
+export function minutesUntil(asOf: Instant, lesson: Pick<Lesson, "date" | "startMin">): number {
+  const from = parseISO(asOf.date).getTime();
+  const to = parseISO(lesson.date).getTime();
+  const dayDiff = Math.round((to - from) / 86_400_000);
+  return Math.max(0, dayDiff * 24 * 60 + (lesson.startMin - asOf.min));
+}
 
 export interface StreamCounts {
   scheduled: number;
