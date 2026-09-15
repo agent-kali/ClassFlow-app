@@ -1,13 +1,15 @@
+import datetime
 from decimal import Decimal
 
-from sqlalchemy import Boolean, CheckConstraint, ForeignKey, Numeric, String, UniqueConstraint
+from sqlalchemy import Boolean, CheckConstraint, Date, ForeignKey, Integer, Numeric, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
-from app.schemas import SchoolColor, TeacherCategory
+from app.schemas import LessonStatus, SchoolColor, TeacherCategory
 
 _CATEGORY_SQL = ", ".join(f"'{category.value}'" for category in TeacherCategory)
 _COLOR_SQL = ", ".join(f"'{color.value}'" for color in SchoolColor)
+_STATUS_SQL = ", ".join(f"'{status.value}'" for status in LessonStatus)
 
 
 class TeacherModel(Base):
@@ -99,3 +101,57 @@ class ClassGroupModel(Base):
     level: Mapped[str] = mapped_column(String, nullable=False)
 
     school: Mapped["SchoolModel"] = relationship(back_populates="class_groups")
+
+
+class LessonModel(Base):
+    __tablename__ = "lessons"
+    __table_args__ = (
+        CheckConstraint(
+            "start_min BETWEEN 0 AND 1439",
+            name="ck_lessons_start_min",
+        ),
+        CheckConstraint(
+            "end_min BETWEEN 1 AND 1440",
+            name="ck_lessons_end_min",
+        ),
+        CheckConstraint("end_min > start_min", name="ck_lessons_end_after_start"),
+        CheckConstraint(
+            f"status IN ({_STATUS_SQL})",
+            name="ck_lessons_status",
+        ),
+        CheckConstraint(
+            "(moved_from_date IS NULL) = (moved_from_start_min IS NULL)",
+            name="ck_lessons_moved_from_pair",
+        ),
+        CheckConstraint(
+            "moved_from_start_min IS NULL OR moved_from_start_min BETWEEN 0 AND 1439",
+            name="ck_lessons_moved_from_start_min",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    date: Mapped[datetime.date] = mapped_column(Date, nullable=False)
+    start_min: Mapped[int] = mapped_column(Integer, nullable=False)
+    end_min: Mapped[int] = mapped_column(Integer, nullable=False)
+    class_group_id: Mapped[str] = mapped_column(
+        ForeignKey("class_groups.id", name="fk_lessons_class_group_id"),
+        nullable=False,
+    )
+    room_id: Mapped[str] = mapped_column(
+        ForeignKey("rooms.id", name="fk_lessons_room_id"),
+        nullable=False,
+    )
+    teacher_id: Mapped[str] = mapped_column(
+        ForeignKey("teachers.id", name="fk_lessons_teacher_id"),
+        nullable=False,
+    )
+    cm_name: Mapped[str | None] = mapped_column(String, nullable=True)
+    curriculum: Mapped[str] = mapped_column(String, nullable=False)
+    week_code: Mapped[str | None] = mapped_column(String, nullable=True)
+    status: Mapped[str] = mapped_column(String, nullable=False)
+    moved_from_date: Mapped[datetime.date | None] = mapped_column(Date, nullable=True)
+    moved_from_start_min: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    class_group: Mapped["ClassGroupModel"] = relationship()
+    room: Mapped["RoomModel"] = relationship()
+    teacher: Mapped["TeacherModel"] = relationship()
