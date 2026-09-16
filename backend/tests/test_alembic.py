@@ -63,3 +63,37 @@ def test_alembic_downgrade_sql_drops_schedule_hierarchy() -> None:
     assert "drop table campuses" in sql
     assert "drop table schools" in sql
     assert "drop table teachers" in sql
+
+
+def test_alembic_upgrade_sql_creates_lessons() -> None:
+    result = _alembic("upgrade", "head", "--sql")
+    assert result.returncode == 0, result.stderr
+    sql = result.stdout.lower()
+    assert "create table lessons" in sql
+    assert "fk_lessons_class_group_id" in sql
+    assert "fk_lessons_room_id" in sql
+    assert "fk_lessons_teacher_id" in sql
+    assert "ck_lessons_start_min" in sql
+    assert "ck_lessons_end_min" in sql
+    assert "ck_lessons_end_after_start" in sql
+    assert "ck_lessons_status" in sql
+    assert "ck_lessons_moved_from_pair" in sql
+    assert "ck_lessons_moved_from_start_min" in sql
+
+
+def test_alembic_downgrade_sql_drops_lessons() -> None:
+    result = _alembic("downgrade", "head:base", "--sql")
+    assert result.returncode == 0, result.stderr
+    assert "drop table lessons" in result.stdout.lower()
+
+
+def test_alembic_head_matches_orm_metadata() -> None:
+    """A migration exists for every ORM table, so `upgrade head` is deployable."""
+    from app.db import Base
+    from app import models  # noqa: F401  register ORM tables on metadata
+
+    result = _alembic("upgrade", "head", "--sql")
+    assert result.returncode == 0, result.stderr
+    sql = result.stdout.lower()
+    for table in Base.metadata.tables:
+        assert f"create table {table}" in sql, f"no migration creates {table}"

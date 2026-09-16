@@ -76,6 +76,8 @@ export function LessonEditForm({ lesson, weekOf, onCancel, onBeforeSave, onSaved
     curriculum: lesson.curriculum,
   }));
   const [pending, setPending] = useState<PendingSave | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const warningRef = useRef<HTMLDivElement>(null);
 
   // In a tall form the warning lands below the fold; bring it to the eye.
@@ -86,6 +88,7 @@ export function LessonEditForm({ lesson, weekOf, onCancel, onBeforeSave, onSaved
   // Any further change invalidates the warning the manager was looking at.
   const edit = (changes: Partial<Draft>) => {
     setPending(null);
+    setSaveError(null);
     setDraft((d) => ({ ...d, ...changes }));
   };
 
@@ -138,15 +141,27 @@ export function LessonEditForm({ lesson, weekOf, onCancel, onBeforeSave, onSaved
   // Only escalate the "save anyway" action to red when a stronger conflict is pending.
   const pendingHasHardConflict = pending?.conflicts.some((c) => c.type !== "travel") ?? false;
 
-  const commit = () => {
+  // The form stays open until the backend has stored the edit, so a rejected
+  // save leaves the manager's typing intact.
+  const commit = async () => {
+    setSaving(true);
+    setSaveError(null);
     onBeforeSave?.();
-    editLesson(lesson.id, patch);
-    onSaved();
+    try {
+      await editLesson(lesson.id, patch);
+      onSaved();
+    } catch (err) {
+      setSaveError(
+        err instanceof Error ? err.message : "The changes could not be saved."
+      );
+    } finally {
+      setSaving(false);
+    }
   };
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!valid) return;
+    if (!valid || saving) return;
     if (!pending) {
       const after = lessons.map((l) => (l.id === lesson.id ? { ...l, ...patch } : l));
       const conflicts = conflictsIntroduced(lessons, after, lookups.roomsById, lesson.id);
@@ -155,7 +170,7 @@ export function LessonEditForm({ lesson, weekOf, onCancel, onBeforeSave, onSaved
         return;
       }
     }
-    commit();
+    void commit();
   };
 
   const field = "flex flex-col gap-0.5";
@@ -351,34 +366,54 @@ export function LessonEditForm({ lesson, weekOf, onCancel, onBeforeSave, onSaved
         </div>
       )}
 
+      {saveError && (
+        <p
+          role="alert"
+          className="rounded border border-danger/25 bg-danger-soft px-2.5 py-2 text-[12px] text-ink"
+        >
+          {saveError}
+        </p>
+      )}
+
       {/* Pinned: in a short window the fields scroll, the decision never leaves. */}
       <div className="sticky bottom-0 -mx-3 -mb-3 flex flex-wrap gap-1.5 border-t border-line bg-raised px-3 py-2">
         {pending ? (
           <>
-            <button type="button" className={actionBtn} onClick={() => setPending(null)}>
+            <button
+              type="button"
+              disabled={saving}
+              className={`${actionBtn} disabled:opacity-40`}
+              onClick={() => setPending(null)}
+            >
               Go back and edit
             </button>
             <button
               type="submit"
+              disabled={saving}
               className={
                 pendingHasHardConflict
-                  ? `${actionBtn} border-danger/40 text-danger hover:border-danger`
-                  : `${actionBtn} border-warn/40 text-warn hover:border-warn`
+                  ? `${actionBtn} border-danger/40 text-danger hover:border-danger disabled:opacity-40`
+                  : `${actionBtn} border-warn/40 text-warn hover:border-warn disabled:opacity-40`
               }
             >
-              Save anyway
+              {saving ? "Saving…" : "Save anyway"}
             </button>
           </>
         ) : (
           <>
             <button
               type="submit"
-              disabled={!valid}
+              disabled={!valid || saving}
               className="rounded bg-accent px-2.5 py-1.5 text-[12px] font-semibold text-accent-ink disabled:opacity-40"
             >
-              Save changes
+              {saving ? "Saving…" : "Save changes"}
             </button>
-            <button type="button" className={actionBtn} onClick={onCancel}>
+            <button
+              type="button"
+              disabled={saving}
+              className={`${actionBtn} disabled:opacity-40`}
+              onClick={onCancel}
+            >
               Cancel
             </button>
           </>

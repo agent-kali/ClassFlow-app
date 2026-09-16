@@ -1,0 +1,24 @@
+# Local PostgreSQL for development and integration tests.
+# classflow is the dev database; classflow_test is created empty for pytest,
+# which owns its schema via `alembic upgrade head`.
+services:
+  postgres:
+    image: postgres:16
+    container_name: classflow-postgres
+    environment:
+      POSTGRES_USER: classflow
+      POSTGRES_PASSWORD: classflow
+      POSTGRES_DB: classflow
+    ports:
+      - "5432:5432"
+    volumes:
+      - classflow-pgdata:/var/lib/postgresql/data
+      - ./scripts/create-test-db.sql:/docker-entrypoint-initdb.d/create-test-db.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U classflow -d classflow"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  classflow-pgdata:

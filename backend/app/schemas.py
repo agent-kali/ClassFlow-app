@@ -46,6 +46,57 @@ class Teacher(BaseModel):
     usd_rate: float = Field(alias="usdRate")
 
 
+class School(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    id: str
+    name: str
+    short_name: str = Field(alias="shortName")
+    district: str
+    color: SchoolColor
+    has_class_managers: bool = Field(alias="hasClassManagers")
+
+
+class Campus(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    id: str
+    school_id: str = Field(alias="schoolId")
+    name: str
+    address: str
+
+
+class Room(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    id: str
+    campus_id: str = Field(alias="campusId")
+    name: str
+
+
+class ClassGroup(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    id: str
+    school_id: str = Field(alias="schoolId")
+    code: str
+    program: str
+    level: str
+
+
+class FxRate(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    vnd_per_usd: float = Field(alias="vndPerUsd")
+    captured_on: str = Field(alias="capturedOn")
+    source: str
+
+    @field_validator("captured_on", mode="before")
+    @classmethod
+    def captured_on_must_be_iso(cls, value: object) -> str:
+        return _require_iso_date(value)
+
+
 class LessonStatus(str, Enum):
     scheduled = "scheduled"
     cancelled = "cancelled"
@@ -64,10 +115,11 @@ class MovedFrom(BaseModel):
         return _require_iso_date(value)
 
 
-class Lesson(BaseModel):
+class _LessonFields(BaseModel):
+    """Every `Lesson` field except `id` — the shape `LessonInput` describes."""
+
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
-    id: str
     date: str
     start_min: StrictInt = Field(alias="startMin", ge=0, le=1439)
     end_min: StrictInt = Field(alias="endMin", ge=1, le=1440)
@@ -88,6 +140,76 @@ class Lesson(BaseModel):
                 if key in data and data[key] is None:
                     raise ValueError(f"{key} must be omitted, not null")
         return data
+
+    @field_validator("date", mode="before")
+    @classmethod
+    def date_must_be_iso(cls, value: object) -> str:
+        return _require_iso_date(value)
+
+    @model_validator(mode="after")
+    def end_after_start(self) -> Self:
+        if self.end_min <= self.start_min:
+            raise ValueError("endMin must be greater than startMin")
+        return self
+
+
+class Lesson(_LessonFields):
+    id: str
+
+
+class LessonCreate(_LessonFields):
+    """Request body for `createLesson` and each element of `importLessons`."""
+
+
+class LessonPatch(BaseModel):
+    """
+    `Partial<LessonInput>`: same fields, all optional. An empty object is a
+    no-op patch. `endMin > startMin` is checked against the merged row in
+    `app.lessons`, since a patch may carry only one side of the pair.
+    """
+
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    date: str | None = None
+    start_min: StrictInt | None = Field(default=None, alias="startMin", ge=0, le=1439)
+    end_min: StrictInt | None = Field(default=None, alias="endMin", ge=1, le=1440)
+    class_group_id: str | None = Field(default=None, alias="classGroupId")
+    room_id: str | None = Field(default=None, alias="roomId")
+    teacher_id: str | None = Field(default=None, alias="teacherId")
+    cm_name: str | None = Field(default=None, alias="cmName")
+    curriculum: str | None = None
+    week_code: str | None = Field(default=None, alias="weekCode")
+    status: LessonStatus | None = None
+    moved_from: MovedFrom | None = Field(default=None, alias="movedFrom")
+
+    @model_validator(mode="before")
+    @classmethod
+    def reject_explicit_nulls(cls, data: object) -> object:
+        """No patch field accepts null: omit it to leave the value alone."""
+        if isinstance(data, dict):
+            for key, value in data.items():
+                if value is None:
+                    raise ValueError(f"{key} must be omitted, not null")
+        return data
+
+    @field_validator("date", mode="before")
+    @classmethod
+    def date_must_be_iso(cls, value: object) -> str:
+        return _require_iso_date(value)
+
+
+class SetLessonStatusBody(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    status: LessonStatus
+
+
+class RescheduleLessonBody(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    date: str
+    start_min: StrictInt = Field(alias="startMin", ge=0, le=1439)
+    end_min: StrictInt = Field(alias="endMin", ge=1, le=1440)
 
     @field_validator("date", mode="before")
     @classmethod

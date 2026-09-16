@@ -46,6 +46,8 @@ export function CreateLessonDialog({ prefill, weekOf, onClose, onCreated }: Prop
   const [curriculum, setCurriculum] = useState("");
   const [cmName, setCmName] = useState("");
   const [weekCode, setWeekCode] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const group = classGroupId ? lookups.classGroupsById.get(classGroupId) : undefined;
   const school = group ? lookups.schoolsById.get(group.schoolId) : undefined;
@@ -82,23 +84,33 @@ export function CreateLessonDialog({ prefill, weekOf, onClose, onCreated }: Prop
   const valid = classGroupId && roomId && teacherId && curriculum.trim() && endMin > startMin;
   const previewUsd = teacher && endMin > startMin ? lessonHours({ startMin, endMin }) * teacher.usdRate : 0;
 
-  const submit = (e: React.FormEvent) => {
+  // The dialog stays open until the lesson is actually stored, so a rejected
+  // save never looks like it worked.
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!valid) return;
-    createLesson({
-      date,
-      startMin,
-      endMin,
-      classGroupId: classGroupId!,
-      roomId: roomId!,
-      teacherId: teacherId!,
-      curriculum: curriculum.trim(),
-      cmName: cmName.trim() || undefined,
-      weekCode: weekCode.trim() || undefined,
-      status: "scheduled",
-    });
-    onCreated?.();
-    onClose();
+    if (!valid || saving) return;
+    setSaving(true);
+    setError(null);
+    try {
+      await createLesson({
+        date,
+        startMin,
+        endMin,
+        classGroupId: classGroupId!,
+        roomId: roomId!,
+        teacherId: teacherId!,
+        curriculum: curriculum.trim(),
+        cmName: cmName.trim() || undefined,
+        weekCode: weekCode.trim() || undefined,
+        status: "scheduled",
+      });
+      onCreated?.();
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "The lesson could not be saved.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const field = "flex flex-col gap-1";
@@ -245,21 +257,31 @@ export function CreateLessonDialog({ prefill, weekOf, onClose, onCreated }: Prop
               <MoneyPair usd={previewUsd} size="sm" align="right" />
             </div>
 
+            {error && (
+              <p
+                role="alert"
+                className="rounded border border-danger/25 bg-danger-soft px-2.5 py-2 text-[12px] text-ink"
+              >
+                {error}
+              </p>
+            )}
+
             <div className="flex justify-end gap-2">
               <Dialog.Close asChild>
                 <button
                   type="button"
-                  className="rounded border border-line px-3 py-1.5 text-[13px] font-medium hover:border-ink-faint"
+                  disabled={saving}
+                  className="rounded border border-line px-3 py-1.5 text-[13px] font-medium hover:border-ink-faint disabled:opacity-40"
                 >
                   Discard
                 </button>
               </Dialog.Close>
               <button
                 type="submit"
-                disabled={!valid}
+                disabled={!valid || saving}
                 className="rounded bg-accent px-3 py-1.5 text-[13px] font-semibold text-accent-ink disabled:opacity-40"
               >
-                Add to schedule
+                {saving ? "Saving…" : "Add to schedule"}
               </button>
             </div>
           </form>
