@@ -80,7 +80,7 @@ The backend suite runs against a real PostgreSQL: it builds the schema with `ale
 - **Schedule** (`/manager`) — the manager's dense ledger. A continuous-time week ruler where a lesson's height is literally its duration (35, 45, 60, 70, 90 minutes — this domain has no uniform grid). Click a lesson to edit it, cancel it, mark no-show, move it, or delete it; drag a lesson to reschedule it, drag empty space (5-minute snap) or use "New lesson" to create. Double-bookings and tight campus-to-campus travel gaps surface themselves. The pay strip at the bottom shows every teacher's week pay and flashes the delta on every edit. "Import a schedule" shows a school's raw spreadsheet flowing column-by-column into the canonical model, then actually inserts the lessons. Optional guided tour: `/manager?tour=1`.
 - **Teacher view** (`/teacher`) — the phone screen, read-only by design. One merged stream across every school, a next-lesson hero, and week/month earnings split into earned-to-now vs scheduled (USD and VND). Cancelled lessons stay visible and are explicitly not paid; finished scheduled lessons settle as earned.
 
-Edits on the manager screen appear on the teacher screen immediately. There is no save-and-send: every action writes straight through to the database.
+Manager mutations write immediately to PostgreSQL. The teacher view reads the same persisted schedule on load or refresh. There is no save-and-send.
 
 **Cancel vs delete.** A lesson that was scheduled and then did not happen is `cancelled` or `no-show` — it stays on the schedule, visibly unpaid, because that is a fact about the week worth keeping. Deleting is for a lesson that should never have existed, and it is gone for good, so it asks first.
 

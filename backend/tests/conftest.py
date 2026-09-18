@@ -98,7 +98,7 @@ def connection(engine: Engine) -> Iterator[Connection]:
 
 @pytest.fixture
 def db_session(connection: Connection) -> Iterator[Session]:
-    # create_savepoint lets the request-scoped commit in get_db() succeed while
+    # create_savepoint lets the function-scoped commit in get_db() succeed while
     # the outer transaction above still discards it after the test.
     session = Session(bind=connection, join_transaction_mode="create_savepoint")
     try:

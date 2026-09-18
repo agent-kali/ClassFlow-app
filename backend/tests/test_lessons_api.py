@@ -551,3 +551,69 @@ def test_reschedule_is_durable_across_sessions(
         assert row.moved_from_start_min == 1080
     finally:
         independent.dispose()
+
+
+# ------------------------------------------------- transaction boundary
+
+
+def test_db_routes_use_function_scoped_get_db() -> None:
+    """
+    get_db() commits after yield. FastAPI's default request-scoped yield
+    teardown runs after the HTTP body is sent, so a 201 could outrun a
+    failed commit. Function scope closes that window.
+    """
+    from fastapi.routing import APIRoute
+
+    from app.db import get_db
+    from app.main import app
+
+    db_routes: list[str] = []
+    for route in app.routes:
+        if not isinstance(route, APIRoute):
+            continue
+        for dep in route.dependant.dependencies:
+            if dep.call is get_db:
+                db_routes.append(route.path)
+                assert dep.scope == "function", (
+                    f"{sorted(route.methods)} {route.path} injects get_db "
+                    "without function scope"
+                )
+    assert db_routes
+
+
+def test_get_db_commits_before_the_http_response_starts(
+    committing_client: TestClient,
+) -> None:
+    from collections.abc import Awaitable, Callable, MutableMapping
+    from typing import Any
+    from unittest.mock import patch
+
+    events: list[str] = []
+    fastapi_app = committing_client.app
+
+    async def observing_app(
+        scope: MutableMapping[str, Any],
+        receive: Callable[[], Awaitable[MutableMapping[str, Any]]],
+        send: Callable[[MutableMapping[str, Any]], Awaitable[None]],
+    ) -> None:
+        async def tracked_send(message: MutableMapping[str, Any]) -> None:
+            if message["type"] == "http.response.start":
+                events.append("response.start")
+            await send(message)
+
+        await fastapi_app(scope, receive, tracked_send)
+
+    original_commit = Session.commit
+
+    def tracked_commit(self: Session, *args: object, **kwargs: object) -> None:
+        events.append("commit")
+        original_commit(self, *args, **kwargs)
+
+    with patch.object(Session, "commit", tracked_commit):
+        with TestClient(observing_app) as client:
+            response = client.post("/lessons", json=NEW_LESSON)
+
+    assert response.status_code == 201, response.text
+    start_at = events.index("response.start")
+    assert "commit" in events[:start_at]
+    assert "commit" not in events[start_at:]

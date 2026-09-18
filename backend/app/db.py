@@ -50,6 +50,10 @@ def get_db() -> Iterator[Session]:
     """
     FastAPI dependency: one session per request, committed only if the handler
     returned without raising. Routes never commit; the boundary owns it.
+
+    Inject with Depends(get_db, scope="function") so this commit/rollback
+    finishes before the HTTP response is sent. FastAPI's default request
+    scope would run the exit code after the body goes out.
     """
     session = get_session_factory()()
     try:
