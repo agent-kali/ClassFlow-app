@@ -11,9 +11,11 @@ import {
   useLastPayEffect,
   useLessons,
   useLookups,
+  useMutationError,
   useTeachers,
   useToday,
 } from "@/data/hooks";
+import { ScheduleBoundary } from "@/data/ScheduleBoundary";
 import type { Lesson } from "@/domain/types";
 import { formatUsd } from "@/domain/money";
 import { mondayOf, toIsoDate, weekDates } from "@/domain/time";
@@ -52,7 +54,9 @@ export default function ManagerPage() {
   return (
     <ClientOnly>
       <Suspense fallback={null}>
-        <ManagerScreen />
+        <ScheduleBoundary>
+          <ManagerScreen />
+        </ScheduleBoundary>
       </Suspense>
     </ClientOnly>
   );
@@ -84,6 +88,16 @@ function ManagerScreen() {
   const filtered = useFilteredLessons(lessons, filters, lookups);
   const payEffect = useLastPayEffect();
   const { rescheduleLesson } = useLessonMutations();
+  const { error: mutationError, clear: clearMutationError } = useMutationError();
+
+  /**
+   * Dragging a lesson has no form to hold the failure, so a rejected move is
+   * reported in the banner below the toolbar. The block returns to where the
+   * backend says it is, because the cache only changes on success.
+   */
+  const moveLesson = (id: string, date: string, startMin: number, endMin: number) => {
+    void rescheduleLesson(id, date, startMin, endMin).catch(() => {});
+  };
 
   const [selection, setSelection] = useState<Selection | null>(null);
   const [editFlash, setEditFlash] = useState<EditFlash | null>(null);
@@ -416,6 +430,27 @@ function ManagerScreen() {
         onNewLesson={() => setCreatePrefill({})}
       />
 
+      {mutationError && (
+        <div
+          role="alert"
+          className="flex items-start gap-2 border-b border-danger/30 bg-danger-soft px-3 py-2"
+        >
+          <span aria-hidden className="text-[12px] text-danger">
+            ⚠
+          </span>
+          <p className="min-w-0 flex-1 text-[12px] text-ink">
+            {mutationError} The schedule still shows what the backend has.
+          </p>
+          <button
+            type="button"
+            onClick={clearMutationError}
+            className="shrink-0 text-[12px] font-medium text-accent hover:underline"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
       <div className="flex min-h-0 min-w-0 flex-1">
         <FilterRail
           filters={filters}
@@ -446,9 +481,7 @@ function ManagerScreen() {
               focusNonce={activeDayFocus?.nonce ?? 0}
               selectedLessonId={selectedLesson?.id ?? null}
               onSelectLesson={selectLesson}
-              onMoveLesson={(id, date, startMin, endMin) =>
-                rescheduleLesson(id, date, startMin, endMin)
-              }
+              onMoveLesson={moveLesson}
             />
           </div>
         ) : (
@@ -469,11 +502,7 @@ function ManagerScreen() {
             selectedLessonId={selectedLesson?.id ?? null}
             lockLessonSelection={tourLessonLock}
             onSelectLesson={selectLesson}
-            onMoveLesson={
-              tourActive
-                ? undefined
-                : (id, date, startMin, endMin) => rescheduleLesson(id, date, startMin, endMin)
-            }
+            onMoveLesson={tourActive ? undefined : moveLesson}
           />
         )}
       </div>

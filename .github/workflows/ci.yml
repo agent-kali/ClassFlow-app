@@ -40,6 +40,25 @@ jobs:
     defaults:
       run:
         working-directory: backend
+    # Lesson persistence is proven against a real PostgreSQL, not a stand-in:
+    # the suite builds its schema with `alembic upgrade head` and relies on
+    # real foreign keys and CHECK constraints.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: classflow
+          POSTGRES_PASSWORD: classflow
+          POSTGRES_DB: classflow_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U classflow -d classflow_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgresql+psycopg://classflow:classflow@localhost:5432/classflow_test
     steps:
       - name: Check out repository
         uses: actions/checkout@v4

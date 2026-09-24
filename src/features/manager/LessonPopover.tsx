@@ -43,13 +43,21 @@ export function LessonPopover({
   const lookups = useLookups();
   const lessons = useLessons();
   const { byLesson } = useConflicts();
-  const { setLessonStatus, rescheduleLesson } = useLessonMutations();
+  const { setLessonStatus, rescheduleLesson, deleteLesson } = useLessonMutations();
 
-  /** One popover, three faces: read the lesson, move it, or edit it in full. */
-  const [mode, setMode] = useState<"details" | "move" | "edit">("details");
+  /**
+   * One popover, four faces: read the lesson, move it, edit it in full, or
+   * confirm removing it. Deleting is deliberately two steps — it is the only
+   * action here that cannot be undone.
+   */
+  const [mode, setMode] = useState<"details" | "move" | "edit" | "confirmDelete">(
+    "details"
+  );
   const [moveDate, setMoveDate] = useState(lesson.date);
   const [moveStart, setMoveStart] = useState(formatMin(lesson.startMin).padStart(5, "0"));
   const [moveEnd, setMoveEnd] = useState(formatMin(lesson.endMin).padStart(5, "0"));
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const group = lookups.classGroupsById.get(lesson.classGroupId);
   const room = lookups.roomsById.get(lesson.roomId);
@@ -87,10 +95,24 @@ export function LessonPopover({
     return out;
   }, [byLesson, isOff, lesson, lessons]);
 
-  const act = (fn: () => void) => {
+  /**
+   * Runs a mutation and only dismisses once the backend has stored it. If it
+   * fails the popover stays open with the reason, and the lesson on screen is
+   * still the one the backend holds.
+   */
+  const act = async (run: () => Promise<unknown>) => {
+    if (pending) return;
+    setPending(true);
+    setError(null);
     onAction?.();
-    fn();
-    onClose();
+    try {
+      await run();
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "That change could not be saved.");
+    } finally {
+      setPending(false);
+    }
   };
 
   const actionBtn =
@@ -237,7 +259,47 @@ export function LessonPopover({
                 <MoneyPair usd={usd} size="sm" align="right" struck={isOff} />
               </div>
 
-              {mode === "details" ? (
+              {error && (
+                <p
+                  role="alert"
+                  className="mt-2.5 rounded border border-danger/25 bg-danger-soft px-2.5 py-2 text-[12px] text-ink"
+                >
+                  {error}
+                </p>
+              )}
+
+              {mode === "confirmDelete" ? (
+                <div className="mt-2.5 rounded border border-danger/30 bg-danger-soft px-2.5 py-2">
+                  <p className="text-[12px] font-semibold text-danger">
+                    Delete this lesson permanently?
+                  </p>
+                  <p className="mt-1 text-[12px] text-ink">
+                    It disappears from the schedule and from {teacher?.code ?? "the teacher"}
+                    &apos;s pay. To record that it did not happen, cancel it instead.
+                  </p>
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    <button
+                      type="button"
+                      disabled={pending}
+                      className="rounded bg-danger px-2.5 py-1.5 text-[12px] font-semibold text-white disabled:opacity-40"
+                      onClick={() => void act(() => deleteLesson(lesson.id))}
+                    >
+                      {pending ? "Deleting…" : "Delete lesson"}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={pending}
+                      className={actionBtn}
+                      onClick={() => {
+                        setError(null);
+                        setMode("details");
+                      }}
+                    >
+                      Keep it
+                    </button>
+                  </div>
+                </div>
+              ) : mode === "details" ? (
                 <div className="mt-2.5 flex flex-wrap gap-1.5">
                   <button type="button" className={actionBtn} onClick={() => setMode("edit")}>
                     Edit lesson
@@ -249,15 +311,17 @@ export function LessonPopover({
                       </button>
                       <button
                         type="button"
-                        className={`${actionBtn} border-danger/40 text-danger hover:border-danger`}
-                        onClick={() => act(() => setLessonStatus(lesson.id, "cancelled"))}
+                        disabled={pending}
+                        className={`${actionBtn} border-danger/40 text-danger hover:border-danger disabled:opacity-40`}
+                        onClick={() => void act(() => setLessonStatus(lesson.id, "cancelled"))}
                       >
                         Cancel lesson
                       </button>
                       <button
                         type="button"
-                        className={`${actionBtn} text-danger`}
-                        onClick={() => act(() => setLessonStatus(lesson.id, "no-show"))}
+                        disabled={pending}
+                        className={`${actionBtn} text-danger disabled:opacity-40`}
+                        onClick={() => void act(() => setLessonStatus(lesson.id, "no-show"))}
                       >
                         Mark no-show
                       </button>
@@ -265,19 +329,27 @@ export function LessonPopover({
                   ) : (
                     <button
                       type="button"
-                      className={`${actionBtn} border-accent text-accent`}
-                      onClick={() => act(() => setLessonStatus(lesson.id, "scheduled"))}
+                      disabled={pending}
+                      className={`${actionBtn} border-accent text-accent disabled:opacity-40`}
+                      onClick={() => void act(() => setLessonStatus(lesson.id, "scheduled"))}
                     >
                       Put it back on the schedule
                     </button>
                   )}
+                  <button
+                    type="button"
+                    className={`${actionBtn} text-ink-mute hover:text-danger`}
+                    onClick={() => setMode("confirmDelete")}
+                  >
+                    Delete…
+                  </button>
                 </div>
               ) : (
                 <form
                   className="mt-2.5 space-y-2"
                   onSubmit={(e) => {
                     e.preventDefault();
-                    act(() =>
+                    void act(() =>
                       rescheduleLesson(lesson.id, moveDate, parseTime(moveStart), parseTime(moveEnd))
                     );
                   }}
@@ -315,12 +387,17 @@ export function LessonPopover({
                   <div className="flex gap-1.5">
                     <button
                       type="submit"
-                      className="rounded bg-accent px-2.5 py-1.5 text-[12px] font-semibold text-accent-ink"
-                      disabled={parseTime(moveEnd) <= parseTime(moveStart)}
+                      className="rounded bg-accent px-2.5 py-1.5 text-[12px] font-semibold text-accent-ink disabled:opacity-40"
+                      disabled={pending || parseTime(moveEnd) <= parseTime(moveStart)}
                     >
-                      Move lesson
+                      {pending ? "Moving…" : "Move lesson"}
                     </button>
-                    <button type="button" className={actionBtn} onClick={() => setMode("details")}>
+                    <button
+                      type="button"
+                      disabled={pending}
+                      className={`${actionBtn} disabled:opacity-40`}
+                      onClick={() => setMode("details")}
+                    >
                       Keep as is
                     </button>
                   </div>

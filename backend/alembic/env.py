@@ -6,6 +6,7 @@ from app.db import Base, get_database_url, get_engine
 from app.models import (  # noqa: F401  register ORM tables on metadata
     CampusModel,
     ClassGroupModel,
+    LessonModel,
     RoomModel,
     SchoolModel,
     TeacherModel,

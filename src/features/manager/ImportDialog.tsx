@@ -24,15 +24,29 @@ export function ImportDialog({
   const lookups = useLookups();
   const { importLessons } = useLessonMutations();
   const [sample, setSample] = useState<ImportSample | null>(null);
+  const [importing, setImporting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const normalized = useMemo(
     () => (sample ? sample.normalized(parseISO(today)) : []),
     [sample, today]
   );
 
-  const finish = () => {
-    if (sample) importLessons(normalized);
-    onClose();
+  // The batch is atomic on the backend, so either every row lands or none do.
+  const finish = async () => {
+    if (!sample || importing) return;
+    setImporting(true);
+    setError(null);
+    try {
+      await importLessons(normalized);
+      onClose();
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "The lessons could not be imported."
+      );
+    } finally {
+      setImporting(false);
+    }
   };
 
   return (
@@ -89,12 +103,22 @@ export function ImportDialog({
             )}
           </div>
 
+          {error && (
+            <p
+              role="alert"
+              className="border-t border-danger/25 bg-danger-soft px-4 py-2 text-[12px] text-ink"
+            >
+              {error} Nothing was imported.
+            </p>
+          )}
+
           <div className="flex items-center justify-between gap-2 border-t border-line px-4 py-3">
             {sample ? (
               <button
                 type="button"
+                disabled={importing}
                 onClick={() => setSample(null)}
-                className="rounded border border-line px-3 py-1.5 text-[13px] font-medium hover:border-ink-faint"
+                className="rounded border border-line px-3 py-1.5 text-[13px] font-medium hover:border-ink-faint disabled:opacity-40"
               >
                 Pick another school
               </button>
@@ -105,7 +129,8 @@ export function ImportDialog({
               <Dialog.Close asChild>
                 <button
                   type="button"
-                  className="rounded border border-line px-3 py-1.5 text-[13px] font-medium hover:border-ink-faint"
+                  disabled={importing}
+                  className="rounded border border-line px-3 py-1.5 text-[13px] font-medium hover:border-ink-faint disabled:opacity-40"
                 >
                   Close
                 </button>
@@ -113,10 +138,13 @@ export function ImportDialog({
               {sample && (
                 <button
                   type="button"
-                  onClick={finish}
-                  className="rounded bg-accent px-3 py-1.5 text-[13px] font-semibold text-accent-ink hover:opacity-90"
+                  onClick={() => void finish()}
+                  disabled={importing}
+                  className="rounded bg-accent px-3 py-1.5 text-[13px] font-semibold text-accent-ink hover:opacity-90 disabled:opacity-40"
                 >
-                  Add {normalized.length} lessons to the schedule
+                  {importing
+                    ? "Importing…"
+                    : `Add ${normalized.length} lessons to the schedule`}
                 </button>
               )}
             </div>

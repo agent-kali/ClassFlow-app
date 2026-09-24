@@ -7,10 +7,25 @@ import { earningsFor, type Earnings, type Instant } from "@/domain/earnings";
 import { detectConflicts, conflictsByLesson, type Conflict } from "@/domain/conflicts";
 
 /**
- * The only door components use into the data layer. Everything here reads
- * the shared store; swapping in a real backend replaces the store's guts,
- * not these signatures.
+ * The only door components use into the data layer. Read hooks return plain
+ * values from the cache, so the timelines, filters and derived pay/conflict
+ * logic never deal with promises. Only the mutation hooks are async, because
+ * only they go to the backend.
  */
+
+export function useScheduleStatus() {
+  const status = useClassFlowStore((s) => s.status);
+  const error = useClassFlowStore((s) => s.loadError);
+  const load = useClassFlowStore((s) => s.load);
+  return { status, error, load };
+}
+
+/** The reason the last mutation was refused, for surfacing near the action. */
+export function useMutationError() {
+  const error = useClassFlowStore((s) => s.mutationError);
+  const clear = useClassFlowStore((s) => s.clearMutationError);
+  return { error, clear };
+}
 
 export function useSchools() {
   return useClassFlowStore((s) => s.schools);
@@ -40,12 +55,18 @@ export function useLastPayEffect(): PayEffect | null {
   return useClassFlowStore((s) => s.lastPayEffect);
 }
 
+/**
+ * Every mutation resolves once the backend has stored the change and the
+ * cache holds the stored lesson. They reject if the backend refuses, so
+ * callers can keep a form open and show why.
+ */
 export function useLessonMutations() {
   const createLesson = useClassFlowStore((s) => s.createLesson);
   const updateLesson = useClassFlowStore((s) => s.updateLesson);
   const editLesson = useClassFlowStore((s) => s.editLesson);
   const setLessonStatus = useClassFlowStore((s) => s.setLessonStatus);
   const rescheduleLesson = useClassFlowStore((s) => s.rescheduleLesson);
+  const deleteLesson = useClassFlowStore((s) => s.deleteLesson);
   const importLessons = useClassFlowStore((s) => s.importLessons);
   return {
     createLesson,
@@ -53,6 +74,7 @@ export function useLessonMutations() {
     editLesson,
     setLessonStatus,
     rescheduleLesson,
+    deleteLesson,
     importLessons,
   };
 }

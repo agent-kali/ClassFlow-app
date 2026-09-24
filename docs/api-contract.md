@@ -2,30 +2,33 @@
 
 HTTP boundary for `DataSource` (`src/data/source.ts`). Resource fields match `src/domain/types.ts` one-to-one: no extra attributes, pagination, filters, or metadata.
 
-This document is a contract, not an implementation: no application routes, database models, authentication, migrations, or executable code.
+This document defines the wire format. It is implemented by the FastAPI app in `backend/app/main.py` over PostgreSQL, and consumed by `src/data/httpSource.ts`. It deliberately says nothing about database models, session handling, or authentication.
 
 ## Asynchrony
 
-The current `DataSource` in `src/data/source.ts` is **synchronous**. Methods return plain values (`School[]`, `Lesson`, `void`, …), not `Promise`.
+`DataSource` in `src/data/source.ts` is **async**: every method returns a `Promise`. `src/data/httpSource.ts` implements it over `fetch`; `src/data/mockSource.ts` is a self-contained in-memory implementation of the same interface, used only when `NEXT_PUBLIC_DATA_SOURCE=mock`. `src/data/store.ts` caches what the source returns and is the only `await` boundary the UI sees.
 
-`src/data/mockSource.ts` and `src/data/store.ts` call those methods synchronously. An HTTP round-trip is inherently asynchronous. A future HTTP-backed implementation must sit behind an **async adapter** or an **async replacement** of `DataSource` (as the interface comment already notes: methods become async) so the UI can `await` without changing call sites beyond that seam.
-
-This contract describes the HTTP mapping of those methods. It does not claim the TypeScript interface returns `Promise` today.
-
-| Method | Current TypeScript return | HTTP success |
+| Method | TypeScript return | HTTP success |
 | --- | --- | --- |
-| `listSchools` | `School[]` | **200** `School[]` |
-| `listCampuses` | `Campus[]` | **200** `Campus[]` |
-| `listRooms` | `Room[]` | **200** `Room[]` |
-| `listTeachers` | `Teacher[]` | **200** `Teacher[]` |
-| `listClassGroups` | `ClassGroup[]` | **200** `ClassGroup[]` |
-| `listLessons` | `Lesson[]` | **200** `Lesson[]` |
-| `getFxRate` | `FxRate` | **200** `FxRate` |
-| `createLesson` | `Lesson` | **201** `Lesson` |
-| `updateLesson` | `void` | **204** empty body |
-| `setLessonStatus` | `void` | **204** empty body |
-| `rescheduleLesson` | `void` | **204** empty body |
-| `importLessons` | `Lesson[]` | **201** `Lesson[]` |
+| `listSchools` | `Promise<School[]>` | **200** `School[]` |
+| `listCampuses` | `Promise<Campus[]>` | **200** `Campus[]` |
+| `listRooms` | `Promise<Room[]>` | **200** `Room[]` |
+| `listTeachers` | `Promise<Teacher[]>` | **200** `Teacher[]` |
+| `listClassGroups` | `Promise<ClassGroup[]>` | **200** `ClassGroup[]` |
+| `listLessons` | `Promise<Lesson[]>` | **200** `Lesson[]` |
+| `getFxRate` | `Promise<FxRate>` | **200** `FxRate` |
+| `createLesson` | `Promise<Lesson>` | **201** `Lesson` |
+| `updateLesson` | `Promise<Lesson>` | **200** `Lesson` |
+| `setLessonStatus` | `Promise<Lesson>` | **200** `Lesson` |
+| `rescheduleLesson` | `Promise<Lesson>` | **200** `Lesson` |
+| `deleteLesson` | `Promise<void>` | **204** empty body |
+| `importLessons` | `Promise<Lesson[]>` | **201** `Lesson[]` |
+
+### Why mutations return the lesson
+
+`rescheduleLesson` derives `movedFrom` on the server (see [Resource schemas](#resource-schemas)). An empty **204** would leave the client unable to know the resulting lesson without either refetching the whole collection or re-implementing that rule. Returning the updated resource keeps the cache exactly equal to stored state after one round trip, and keeps the move rule in one place.
+
+`deleteLesson` has nothing to return, so it stays **204**.
 
 Successful JSON responses use `Content-Type: application/json`.
 
@@ -71,7 +74,7 @@ Values are only those listed in `types.ts`:
 
 ## Conflicts are persisted, not rejected
 
-`src/domain/conflicts.ts` detects overlaps and travel-gap warnings **after** lessons exist. The manager is shown conflicts; writes are not blocked. `src/data/store.ts` persists overlapping lessons with no uniqueness check on teacher, room, or time.
+`src/domain/conflicts.ts` detects overlaps and travel-gap warnings **after** lessons exist. The manager is shown conflicts; writes are not blocked. The `lessons` table has no uniqueness constraint on teacher, room, or time, so overlapping lessons are stored side by side.
 
 Therefore this contract does **not** use **409** for schedule collisions. That would invent a business rule the domain does not enforce.
 
@@ -217,7 +220,9 @@ Constraint: `endMin` must be strictly greater than `startMin`. Otherwise **422**
 
 Optional fields (`cmName`, `weekCode`, `movedFrom`) may be omitted; `null` is not allowed.
 
-`rescheduleLesson` in `store.ts` sets `movedFrom` to the first origin (`before.movedFrom` if already present, otherwise `{ date, startMin }` of the lesson before the move). `updateLesson` on `DataSource` applies the patch as given and does not invent `movedFrom`.
+`PATCH /lessons/{id}/reschedule` sets `movedFrom` to the first origin: the stored `movedFrom` if the lesson has already been moved, otherwise `{ date, startMin }` of the lesson as it stood before this move. A lesson moved twice still reports where it originally sat, not the latest hop.
+
+`updateLesson` applies the patch as given and does not invent `movedFrom`. The caller decides whether an edit counts as a move and sends the field explicitly — `editLesson` in `store.ts` does this, which is why it has no endpoint of its own.
 
 ### LessonInput
 
@@ -282,26 +287,34 @@ Exactly one HTTP endpoint per method. No query parameters: none of the `DataSour
 
 `{id}` is `Lesson.id` (`string`).
 
-Signatures below are the **current synchronous** interface.
-
 | Interface method | HTTP method | URL | query params | request body | response schema | Error codes |
 | --- | --- | --- | --- | --- | --- | --- |
-| `listSchools(): School[]` | `GET` | `/schools` | — | — | `School[]` | — |
-| `listCampuses(): Campus[]` | `GET` | `/campuses` | — | — | `Campus[]` | — |
-| `listRooms(): Room[]` | `GET` | `/rooms` | — | — | `Room[]` | — |
-| `listTeachers(): Teacher[]` | `GET` | `/teachers` | — | — | `Teacher[]` | — |
-| `listClassGroups(): ClassGroup[]` | `GET` | `/class-groups` | — | — | `ClassGroup[]` | — |
-| `listLessons(): Lesson[]` | `GET` | `/lessons` | — | — | `Lesson[]` | — |
-| `getFxRate(): FxRate` | `GET` | `/fx-rate` | — | — | `FxRate` | — |
-| `createLesson(input): Lesson` | `POST` | `/lessons` | — | `LessonInput` | `Lesson` | `422` |
-| `updateLesson(id, patch): void` | `PATCH` | `/lessons/{id}` | — | `Partial<LessonInput>` | — (204) | `404`, `422` |
-| `setLessonStatus(id, status): void` | `PATCH` | `/lessons/{id}/status` | — | `SetLessonStatusBody` | — (204) | `404`, `422` |
-| `rescheduleLesson(id, date, startMin, endMin): void` | `PATCH` | `/lessons/{id}/reschedule` | — | `RescheduleLessonBody` | — (204) | `404`, `422` |
-| `importLessons(inputs): Lesson[]` | `POST` | `/lessons/import` | — | `LessonInput[]` | `Lesson[]` | `422` |
+| `listSchools(): Promise<School[]>` | `GET` | `/schools` | — | — | `School[]` | — |
+| `listCampuses(): Promise<Campus[]>` | `GET` | `/campuses` | — | — | `Campus[]` | — |
+| `listRooms(): Promise<Room[]>` | `GET` | `/rooms` | — | — | `Room[]` | — |
+| `listTeachers(): Promise<Teacher[]>` | `GET` | `/teachers` | — | — | `Teacher[]` | — |
+| `listClassGroups(): Promise<ClassGroup[]>` | `GET` | `/class-groups` | — | — | `ClassGroup[]` | — |
+| `listLessons(): Promise<Lesson[]>` | `GET` | `/lessons` | — | — | `Lesson[]` | — |
+| `getFxRate(): Promise<FxRate>` | `GET` | `/fx-rate` | — | — | `FxRate` | — |
+| `createLesson(input): Promise<Lesson>` | `POST` | `/lessons` | — | `LessonInput` | `Lesson` (201) | `422` |
+| `updateLesson(id, patch): Promise<Lesson>` | `PATCH` | `/lessons/{id}` | — | `Partial<LessonInput>` | `Lesson` (200) | `404`, `422` |
+| `setLessonStatus(id, status): Promise<Lesson>` | `PATCH` | `/lessons/{id}/status` | — | `SetLessonStatusBody` | `Lesson` (200) | `404`, `422` |
+| `rescheduleLesson(id, date, startMin, endMin): Promise<Lesson>` | `PATCH` | `/lessons/{id}/reschedule` | — | `RescheduleLessonBody` | `Lesson` (200) | `404`, `422` |
+| `deleteLesson(id): Promise<void>` | `DELETE` | `/lessons/{id}` | — | — | — (204) | `404` |
+| `importLessons(inputs): Promise<Lesson[]>` | `POST` | `/lessons/import` | — | `LessonInput[]` | `Lesson[]` (201) | `422` |
 
-An empty collection is `[]` with **200**, not **404**. **404** applies when a mutation targets a lesson `{id}` that does not exist (`store.ts` finds no row and no-ops). **409** is not used.
+An empty collection is `[]` with **200**, not **404**. **404** applies when a mutation targets a lesson `{id}` that does not exist. **409** is not used.
 
-`editLesson` exists on the store only, not on `DataSource`, and has no endpoint.
+`editLesson` exists on the store only, not on `DataSource`, and has no endpoint. It resolves `movedFrom` from the cached lesson and then calls `updateLesson`.
+
+### DELETE /lessons/{id}
+
+Removes the lesson permanently. Deletion is how a lesson that should never have existed is corrected; a lesson that was scheduled and then did not happen is a `cancelled` or `no-show` **status**, not a delete, because those stay visible and explicitly unpaid.
+
+- **204** with an empty body on success.
+- **404** with the [not-found body](#404-not-found) when no lesson has that `{id}`. Deleting the same `{id}` twice therefore returns **204** and then **404**; the operation is not silently idempotent, consistent with every other mutation on a missing `{id}`.
+- **409** is not used. A lesson that overlaps another is still deletable, and nothing blocks the delete.
+- There is no soft delete, no `deletedAt`, and no cascade: `Lesson` is the leaf of the model.
 
 ## Errors
 
@@ -309,7 +322,7 @@ Error bodies are always JSON. Successful responses are not wrapped in an error s
 
 ### 404 Not Found
 
-No lesson with the given `{id}`. Used by `updateLesson`, `setLessonStatus`, and `rescheduleLesson`.
+No lesson with the given `{id}`. Used by `updateLesson`, `setLessonStatus`, `rescheduleLesson`, and `deleteLesson`.
 
 ```json
 {
@@ -335,6 +348,11 @@ Not used. Overlaps and travel gaps are not write-time invariants. See [Conflicts
 ### 422 Unprocessable Entity
 
 The body does not match the schema: invalid JSON, wrong type, unknown field, value outside an enum, `date` not `YYYY-MM-DD`, `startMin` / `endMin` / `movedFrom.startMin` not integers in range, `endMin <= startMin`, or `usdRate` / `vndPerUsd` not a number.
+
+Two further cases are **422**, because the body is well-formed but not acceptable:
+
+- **A referenced id does not exist.** `classGroupId`, `roomId` or `teacherId` naming a row that is not in the database is reported with that `field`. The foreign keys remain the real guarantee; this check only keeps the failure inside the documented error shape.
+- **A patch whose merged result is invalid.** `Partial<LessonInput>` may carry only one side of the time pair, so `endMin > startMin` is checked against the patch merged with the stored lesson and reported on `endMin`.
 
 For `importLessons`, any invalid element fails the **entire** batch; nothing is written.
 
@@ -373,6 +391,7 @@ Every `DataSource` method is covered by **exactly one** endpoint. This contract 
 | 9 | `updateLesson` | `PATCH /lessons/{id}` | yes | yes |
 | 10 | `setLessonStatus` | `PATCH /lessons/{id}/status` | yes | yes |
 | 11 | `rescheduleLesson` | `PATCH /lessons/{id}/reschedule` | yes | yes |
-| 12 | `importLessons` | `POST /lessons/import` | yes | yes |
+| 12 | `deleteLesson` | `DELETE /lessons/{id}` | yes | yes |
+| 13 | `importLessons` | `POST /lessons/import` | yes | yes |
 
-Total: **12 methods, 12 endpoints, 0 extras**. No `GET /lessons/{id}`: `DataSource` has no single-lesson read. No query filters: list methods take no arguments.
+Total: **13 methods, 13 endpoints, 0 extras**. No `GET /lessons/{id}`: `DataSource` has no single-lesson read. No query filters: list methods take no arguments, so `GET /lessons` returns the whole collection.
