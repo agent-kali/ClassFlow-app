@@ -3,6 +3,9 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { TopBar } from "@/components/TopBar";
 import { useLessons, useLookups, useTeachers, useToday } from "@/data/hooks";
+import { resolveTeacherIdentity } from "@/data/access";
+import { useAuthStore } from "@/data/authStore";
+import { isMockMode } from "@/data/client";
 import type { Instant } from "@/domain/earnings";
 import { EarningsPanel } from "./EarningsPanel";
 import { NextLessonBanner } from "./NextLessonBanner";
@@ -48,8 +51,15 @@ export function TeacherDashboard() {
   const today = useToday();
   const asOf = useAsOf(today);
 
-  const [teacherId, setTeacherId] = useState(teachers[0]?.id);
-  const teacher = teachers.find((t) => t.id === teacherId) ?? teachers[0];
+  const mockMode = isMockMode();
+  const authenticatedTeacherId = useAuthStore((s) => s.user?.teacher?.id ?? null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const { teacherId, canSwitch } = resolveTeacherIdentity({
+    mockMode,
+    selectedId: selectedId ?? teachers[0]?.id ?? null,
+    authenticatedTeacherId,
+  });
+  const teacher = teachers.find((t) => t.id === teacherId);
 
   const [scheduleMode, setScheduleMode] = useState<PeriodMode>("week");
   const [scheduleAnchor, setScheduleAnchor] = useState(today);
@@ -100,21 +110,22 @@ export function TeacherDashboard() {
               {teacher.code} · {teacher.category}
             </p>
           </div>
-          {/* Demo affordance: stand in any teacher's shoes. Kept quiet. */}
-          <label className="teacher-identity__demo">
-            <span className="sr-only">View as teacher</span>
-            <select
-              value={teacher.id}
-              onChange={(e) => setTeacherId(e.target.value)}
-              className="cf-mono rounded border border-line bg-raised px-2 py-1.5 text-[13px] text-ink-mute focus:border-accent focus:text-ink focus:outline-none"
-            >
-              {teachers.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.code} · {t.name}
-                </option>
-              ))}
-            </select>
-          </label>
+          {canSwitch && (
+            <label className="teacher-identity__demo">
+              <span className="sr-only">View as teacher</span>
+              <select
+                value={teacher.id}
+                onChange={(e) => setSelectedId(e.target.value)}
+                className="cf-mono rounded border border-line bg-raised px-2 py-1.5 text-[13px] text-ink-mute focus:border-accent focus:text-ink focus:outline-none"
+              >
+                {teachers.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.code} · {t.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
         </header>
 
         {operational && (

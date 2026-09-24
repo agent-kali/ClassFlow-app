@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { ApiError } from "./httpSource";
 import { createClassFlowStore } from "./store";
 import type { DataSource } from "./source";
 import type { FxRate, Lesson, LessonInput, LessonStatus } from "@/domain/types";
@@ -106,6 +107,41 @@ describe("initial load", () => {
     const { store } = await readyStore({ listLessons: vi.fn(async () => []) });
     expect(store.getState().status).toBe("ready");
     expect(store.getState().lessons).toEqual([]);
+  });
+
+  it("records the user the cache was loaded for and reset drops it", async () => {
+    const store = createClassFlowStore(
+      fakeSource({ listLessons: vi.fn(async () => [STORED]) })
+    );
+    await store.getState().load("usr-manager");
+    expect(store.getState().loadedForUserId).toBe("usr-manager");
+    expect(store.getState().lessons).toEqual([STORED]);
+    store.getState().reset();
+    expect(store.getState().status).toBe("idle");
+    expect(store.getState().lessons).toEqual([]);
+    expect(store.getState().loadedForUserId).toBeNull();
+  });
+
+  it("a 401 clears lessons that were already cached", async () => {
+    let calls = 0;
+    const store = createClassFlowStore(
+      fakeSource({
+        listLessons: vi.fn(async () => {
+          calls += 1;
+          if (calls > 1) {
+            throw new ApiError(401, "unauthorized", "Authentication required.");
+          }
+          return [STORED];
+        }),
+      })
+    );
+    await store.getState().load("usr-a");
+    expect(store.getState().lessons).toEqual([STORED]);
+    await store.getState().load("usr-b");
+    expect(store.getState().status).toBe("error");
+    expect(store.getState().loadErrorStatus).toBe(401);
+    expect(store.getState().lessons).toEqual([]);
+    expect(store.getState().loadedForUserId).toBeNull();
   });
 
   it("reports an error and no lessons when the backend is unreachable", async () => {

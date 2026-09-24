@@ -14,10 +14,11 @@ export function isMockMode(): boolean {
   return process.env.NEXT_PUBLIC_DATA_SOURCE === "mock";
 }
 
-/** Defaults to the Next.js rewrite in next.config.ts, which proxies FastAPI. */
-export function apiBaseUrl(): string {
-  return process.env.NEXT_PUBLIC_API_BASE_URL ?? "/api";
-}
+/**
+ * Authenticated browser traffic uses the same-origin Next rewrite only.
+ * There is no second base URL: the session cookie is host-only on this origin.
+ */
+export const API_BASE_URL = "/api";
 
 let cached: DataSource | null = null;
 
@@ -25,7 +26,7 @@ export function getDataSource(): DataSource {
   if (!cached) {
     cached = isMockMode()
       ? createMockSource()
-      : createHttpSource({ baseUrl: apiBaseUrl() });
+      : createHttpSource({ baseUrl: API_BASE_URL });
   }
   return cached;
 }

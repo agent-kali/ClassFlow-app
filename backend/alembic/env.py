@@ -9,7 +9,9 @@ from app.models import (  # noqa: F401  register ORM tables on metadata
     LessonModel,
     RoomModel,
     SchoolModel,
+    SessionModel,
     TeacherModel,
+    UserModel,
 )
 
 config = context.config

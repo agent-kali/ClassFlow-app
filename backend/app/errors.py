@@ -24,6 +24,8 @@ _WIRE_FIELDS = {
     "status",
     "movedFrom",
     "id",
+    "email",
+    "password",
 }
 
 
@@ -34,6 +36,30 @@ class NotFoundError(Exception):
         self.resource = resource
         self.id = id
         super().__init__(f"{resource} not found: {id}")
+
+
+class UnauthorizedError(Exception):
+    """No usable session, or the credentials do not match a user."""
+
+    def __init__(
+        self,
+        message: str = "Authentication required.",
+        code: str = "unauthorized",
+        *,
+        clear_cookie: bool = False,
+    ) -> None:
+        self.message = message
+        self.code = code
+        self.clear_cookie = clear_cookie
+        super().__init__(message)
+
+
+class ForbiddenError(Exception):
+    """The session is valid and the role may not perform this operation."""
+
+    def __init__(self, message: str = "You do not have permission to do that.") -> None:
+        self.message = message
+        super().__init__(message)
 
 
 class UnprocessableError(Exception):
@@ -56,6 +82,14 @@ def not_found_body(resource: str, id: str) -> dict[str, Any]:
         "resource": resource,
         "id": id,
     }
+
+
+def unauthorized_body(message: str, code: str) -> dict[str, Any]:
+    return {"status": 401, "code": code, "message": message}
+
+
+def forbidden_body(message: str) -> dict[str, Any]:
+    return {"status": 403, "code": "forbidden", "message": message}
 
 
 def unprocessable_body(message: str, field: str | None = None) -> dict[str, Any]:
@@ -84,6 +118,23 @@ def _message_from_validation_error(error: dict[str, Any]) -> str:
 
 
 def register_error_handlers(app: FastAPI) -> None:
+    # Imported here so cookie clearing can live next to the session module
+    # without an import cycle through the route table.
+    from app.auth import clear_session_cookie
+
+    @app.exception_handler(UnauthorizedError)
+    async def handle_unauthorized(_: Request, exc: UnauthorizedError) -> JSONResponse:
+        response = JSONResponse(
+            status_code=401, content=unauthorized_body(exc.message, exc.code)
+        )
+        if exc.clear_cookie:
+            clear_session_cookie(response)
+        return response
+
+    @app.exception_handler(ForbiddenError)
+    async def handle_forbidden(_: Request, exc: ForbiddenError) -> JSONResponse:
+        return JSONResponse(status_code=403, content=forbidden_body(exc.message))
+
     @app.exception_handler(NotFoundError)
     async def handle_not_found(_: Request, exc: NotFoundError) -> JSONResponse:
         return JSONResponse(status_code=404, content=not_found_body(exc.resource, exc.id))

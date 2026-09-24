@@ -17,6 +17,7 @@ import { toIsoDate } from "@/domain/time";
 import type { DataSource } from "./source";
 import { loadSchedule } from "./source";
 import { getDataSource } from "./client";
+import { ApiError } from "./httpSource";
 
 /**
  * The client-side cache of server state. PostgreSQL owns the schedule; this
@@ -53,10 +54,16 @@ interface ClassFlowState {
   status: LoadStatus;
   /** Why the initial load failed, if it did. */
   loadError: string | null;
+  /** HTTP status of the last failed load, when the failure was an API response. */
+  loadErrorStatus: number | null;
+  /** User id the ready cache belongs to. Null in mock mode and before the first load. */
+  loadedForUserId: string | null;
   /** Why the last mutation failed. Cleared when another one succeeds. */
   mutationError: string | null;
 
-  load(): Promise<void>;
+  load(userId?: string | null): Promise<void>;
+  /** Drop every cached row so the next identity cannot see the previous one. */
+  reset(): void;
   clearMutationError(): void;
 
   createLesson(input: LessonInput): Promise<Lesson>;
@@ -91,7 +98,21 @@ function describeError(error: unknown): string {
   return error instanceof Error ? error.message : "Something went wrong.";
 }
 
+function errorStatus(error: unknown): number | null {
+  return error instanceof ApiError ? error.status : null;
+}
+
 const EMPTY_FX: FxRate = { vndPerUsd: 0, capturedOn: "", source: "" };
+
+const EMPTY_COLLECTIONS = {
+  schools: [] as School[],
+  campuses: [] as Campus[],
+  rooms: [] as Room[],
+  teachers: [] as Teacher[],
+  classGroups: [] as ClassGroup[],
+  lessons: [] as Lesson[],
+  fxRate: EMPTY_FX,
+};
 
 export function createClassFlowStore(source: DataSource) {
   return create<ClassFlowState>((set, get) => {
@@ -140,11 +161,13 @@ export function createClassFlowStore(source: DataSource) {
       lastPayEffect: null,
       status: "idle",
       loadError: null,
+      loadErrorStatus: null,
+      loadedForUserId: null,
       mutationError: null,
 
-      async load() {
+      async load(userId: string | null = null) {
         if (get().status === "loading") return;
-        set({ status: "loading", loadError: null });
+        set({ status: "loading", loadError: null, loadErrorStatus: null });
         try {
           const snapshot = await loadSchedule(source);
           set({
@@ -152,12 +175,33 @@ export function createClassFlowStore(source: DataSource) {
             today: toIsoDate(new Date()),
             status: "ready",
             loadError: null,
+            loadErrorStatus: null,
+            loadedForUserId: userId,
           });
         } catch (error) {
           // No fallback to fixtures: an unreachable backend is an error the
-          // manager must see, not a different schedule.
-          set({ status: "error", loadError: describeError(error) });
+          // manager must see, not a different schedule. A 401 also drops any
+          // rows already cached for the previous identity.
+          const statusCode = errorStatus(error);
+          set({
+            status: "error",
+            loadError: describeError(error),
+            loadErrorStatus: statusCode,
+            ...(statusCode === 401 ? { ...EMPTY_COLLECTIONS, loadedForUserId: null } : {}),
+          });
         }
+      },
+
+      reset() {
+        set({
+          ...EMPTY_COLLECTIONS,
+          lastPayEffect: null,
+          status: "idle",
+          loadError: null,
+          loadErrorStatus: null,
+          mutationError: null,
+          loadedForUserId: null,
+        });
       },
 
       clearMutationError() {

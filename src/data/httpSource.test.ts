@@ -49,6 +49,22 @@ const LESSON: LessonInput = {
   status: "scheduled",
 };
 
+describe("transport", () => {
+  it("sends the session cookie only to the same origin", async () => {
+    let credentials: RequestCredentials | undefined;
+    const fetchImpl = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+      credentials = init?.credentials;
+      return new Response("[]", {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }) as typeof fetch;
+    const source = createHttpSource({ fetchImpl, baseUrl: "/api" });
+    await source.listLessons();
+    expect(credentials).toBe("same-origin");
+  });
+});
+
 describe("read methods", () => {
   it.each([
     ["listSchools", "/api/schools"],

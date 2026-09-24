@@ -16,6 +16,7 @@ import {
   useToday,
 } from "@/data/hooks";
 import { ScheduleBoundary } from "@/data/ScheduleBoundary";
+import { AuthGate } from "@/features/auth/AuthGate";
 import type { Lesson } from "@/domain/types";
 import { formatUsd } from "@/domain/money";
 import { mondayOf, toIsoDate, weekDates } from "@/domain/time";
@@ -53,11 +54,13 @@ import { useTourActive } from "@/features/tour/useTourActive";
 export default function ManagerPage() {
   return (
     <ClientOnly>
-      <Suspense fallback={null}>
-        <ScheduleBoundary>
-          <ManagerScreen />
-        </ScheduleBoundary>
-      </Suspense>
+      <AuthGate role="manager">
+        <Suspense fallback={null}>
+          <ScheduleBoundary>
+            <ManagerScreen />
+          </ScheduleBoundary>
+        </Suspense>
+      </AuthGate>
     </ClientOnly>
   );
 }

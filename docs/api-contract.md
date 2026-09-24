@@ -2,7 +2,9 @@
 
 HTTP boundary for `DataSource` (`src/data/source.ts`). Resource fields match `src/domain/types.ts` one-to-one: no extra attributes, pagination, filters, or metadata.
 
-This document defines the wire format. It is implemented by the FastAPI app in `backend/app/main.py` over PostgreSQL, and consumed by `src/data/httpSource.ts`. It deliberately says nothing about database models, session handling, or authentication.
+This document defines the wire format. It is implemented by the FastAPI app in `backend/app/main.py` over PostgreSQL, and consumed by `src/data/httpSource.ts`. The browser calls these paths on its own origin under `/api`; Next.js forwards them to FastAPI. There is no second browser origin and no CORS setup.
+
+Schedule routes require a session. Authentication is the three routes in [Authentication](#authentication). `GET /health` stays public.
 
 ## Asynchrony
 
@@ -281,27 +283,67 @@ The `date`, `startMin`, and `endMin` arguments of `rescheduleLesson` are the sam
 }
 ```
 
+## Authentication
+
+A session is an HttpOnly cookie named `classflow_session`. The browser never sees a token in `localStorage`, and responses never include `password_hash`. Role is not accepted from the client.
+
+| Method | URL | Success | Errors |
+| --- | --- | --- | --- |
+| `POST` | `/auth/login` | **200** `AuthUser` and `Set-Cookie` | **401** `invalid_credentials`, **422** |
+| `POST` | `/auth/logout` | **204** and the cookie is cleared | — |
+| `GET` | `/auth/me` | **200** `AuthUser` | **401** `unauthorized` |
+
+`POST /auth/login` body is `{ "email": string, "password": string }` with `additionalProperties: false`. Email is lowercased before lookup. Logout is idempotent when no session is present.
+
+`AuthUser` is `{ id, email, role }` and, for a teacher, `teacher: { id, code, name }`. `role` is `"manager"` or `"teacher"`. A manager response omits `teacher`. The teacher object has no `usdRate`.
+
+**401** and **403** use the same envelope as the other errors:
+
+```json
+{ "status": 401, "code": "unauthorized", "message": "Authentication required." }
+```
+
+```json
+{ "status": 401, "code": "invalid_credentials", "message": "Invalid email or password." }
+```
+
+```json
+{ "status": 403, "code": "forbidden", "message": "You do not have permission to do that." }
+```
+
+Unauthenticated schedule reads and writes are **401**. A teacher calling any lesson mutation is **403**, including when the lesson id does not exist. A manager mutating a missing lesson is still **404**. Validation stays **422**.
+
+## Who sees which rows
+
+`GET /lessons` ignores query parameters. A manager receives every lesson. A teacher receives `teacher_id` equal to the session's linked teacher.
+
+`GET /teachers` is every teacher for a manager, and only the linked teacher for a teacher account.
+
+`GET /schools`, `GET /campuses`, `GET /rooms`, and `GET /class-groups` are the full catalog for a manager. For a teacher they are only the rows reachable from that teacher's lessons (the lesson's room, that room's campus, the lesson's class group, and the schools of those campuses and class groups). A teacher with no lessons receives `[]`.
+
+`GET /fx-rate` is the one agency spot rate for any authenticated user. Teachers need it to show earnings. It is not another teacher's pay and it is not the school catalog.
+
 ## Table: DataSource → endpoint
 
-Exactly one HTTP endpoint per method. No query parameters: none of the `DataSource` read methods take arguments.
+Exactly one HTTP endpoint per `DataSource` method. No query parameters: none of the `DataSource` read methods take arguments. The authenticated caller changes which rows come back; it does not add a filter argument. The auth routes above are not `DataSource` methods.
 
 `{id}` is `Lesson.id` (`string`).
 
 | Interface method | HTTP method | URL | query params | request body | response schema | Error codes |
 | --- | --- | --- | --- | --- | --- | --- |
-| `listSchools(): Promise<School[]>` | `GET` | `/schools` | — | — | `School[]` | — |
-| `listCampuses(): Promise<Campus[]>` | `GET` | `/campuses` | — | — | `Campus[]` | — |
-| `listRooms(): Promise<Room[]>` | `GET` | `/rooms` | — | — | `Room[]` | — |
-| `listTeachers(): Promise<Teacher[]>` | `GET` | `/teachers` | — | — | `Teacher[]` | — |
-| `listClassGroups(): Promise<ClassGroup[]>` | `GET` | `/class-groups` | — | — | `ClassGroup[]` | — |
-| `listLessons(): Promise<Lesson[]>` | `GET` | `/lessons` | — | — | `Lesson[]` | — |
-| `getFxRate(): Promise<FxRate>` | `GET` | `/fx-rate` | — | — | `FxRate` | — |
-| `createLesson(input): Promise<Lesson>` | `POST` | `/lessons` | — | `LessonInput` | `Lesson` (201) | `422` |
-| `updateLesson(id, patch): Promise<Lesson>` | `PATCH` | `/lessons/{id}` | — | `Partial<LessonInput>` | `Lesson` (200) | `404`, `422` |
-| `setLessonStatus(id, status): Promise<Lesson>` | `PATCH` | `/lessons/{id}/status` | — | `SetLessonStatusBody` | `Lesson` (200) | `404`, `422` |
-| `rescheduleLesson(id, date, startMin, endMin): Promise<Lesson>` | `PATCH` | `/lessons/{id}/reschedule` | — | `RescheduleLessonBody` | `Lesson` (200) | `404`, `422` |
-| `deleteLesson(id): Promise<void>` | `DELETE` | `/lessons/{id}` | — | — | — (204) | `404` |
-| `importLessons(inputs): Promise<Lesson[]>` | `POST` | `/lessons/import` | — | `LessonInput[]` | `Lesson[]` (201) | `422` |
+| `listSchools(): Promise<School[]>` | `GET` | `/schools` | — | — | `School[]` scoped to the session | `401` |
+| `listCampuses(): Promise<Campus[]>` | `GET` | `/campuses` | — | — | `Campus[]` scoped to the session | `401` |
+| `listRooms(): Promise<Room[]>` | `GET` | `/rooms` | — | — | `Room[]` scoped to the session | `401` |
+| `listTeachers(): Promise<Teacher[]>` | `GET` | `/teachers` | — | — | `Teacher[]` scoped to the session | `401` |
+| `listClassGroups(): Promise<ClassGroup[]>` | `GET` | `/class-groups` | — | — | `ClassGroup[]` scoped to the session | `401` |
+| `listLessons(): Promise<Lesson[]>` | `GET` | `/lessons` | — | — | `Lesson[]` scoped to the session | `401` |
+| `getFxRate(): Promise<FxRate>` | `GET` | `/fx-rate` | — | — | `FxRate` | `401` |
+| `createLesson(input): Promise<Lesson>` | `POST` | `/lessons` | — | `LessonInput` | `Lesson` (201) | `401`, `403`, `422` |
+| `updateLesson(id, patch): Promise<Lesson>` | `PATCH` | `/lessons/{id}` | — | `Partial<LessonInput>` | `Lesson` (200) | `401`, `403`, `404`, `422` |
+| `setLessonStatus(id, status): Promise<Lesson>` | `PATCH` | `/lessons/{id}/status` | — | `SetLessonStatusBody` | `Lesson` (200) | `401`, `403`, `404`, `422` |
+| `rescheduleLesson(id, date, startMin, endMin): Promise<Lesson>` | `PATCH` | `/lessons/{id}/reschedule` | — | `RescheduleLessonBody` | `Lesson` (200) | `401`, `403`, `404`, `422` |
+| `deleteLesson(id): Promise<void>` | `DELETE` | `/lessons/{id}` | — | — | — (204) | `401`, `403`, `404` |
+| `importLessons(inputs): Promise<Lesson[]>` | `POST` | `/lessons/import` | — | `LessonInput[]` | `Lesson[]` (201) | `401`, `403`, `422` |
 
 An empty collection is `[]` with **200**, not **404**. **404** applies when a mutation targets a lesson `{id}` that does not exist. **409** is not used.
 
@@ -376,7 +418,7 @@ Example: `{"status":422,"code":"unprocessable_entity","message":"endMin must be 
 
 ## Coverage checklist
 
-Every `DataSource` method is covered by **exactly one** endpoint. This contract has no extra endpoints.
+Every `DataSource` method is covered by **exactly one** endpoint. The only routes outside that list are `GET /health` and `/auth/login`, `/auth/logout`, `/auth/me`.
 
 | # | DataSource method | Endpoint | Covered by exactly one | No extras |
 | --- | --- | --- | --- | --- |

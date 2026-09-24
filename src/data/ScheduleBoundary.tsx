@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect } from "react";
+import { useAuthStore } from "./authStore";
 import { useScheduleStatus } from "./hooks";
+import { useClassFlowStore } from "./store";
 
 /**
  * Loads the schedule from the backend once, and holds the screen until it is
@@ -11,10 +13,20 @@ import { useScheduleStatus } from "./hooks";
  */
 export function ScheduleBoundary({ children }: { children: React.ReactNode }) {
   const { status, error, load } = useScheduleStatus();
+  const userId = useAuthStore((s) => s.user?.id ?? null);
+  const loadErrorStatus = useClassFlowStore((s) => s.loadErrorStatus);
 
   useEffect(() => {
-    if (status === "idle") void load();
-  }, [status, load]);
+    if (status === "idle") void load(userId);
+  }, [status, load, userId]);
+
+  if (loadErrorStatus === 401) {
+    return (
+      <div className="flex h-dvh items-center justify-center" role="status">
+        <p className="text-[13px] text-ink-mute">Checking session…</p>
+      </div>
+    );
+  }
 
   if (status === "ready") return <>{children}</>;
 

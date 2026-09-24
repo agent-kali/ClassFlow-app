@@ -1,8 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { useAuthStore } from "@/data/authStore";
+import { isMockMode } from "@/data/client";
 import { useFxRate } from "@/data/hooks";
+import { useClassFlowStore } from "@/data/store";
 import { formatFxRate } from "@/domain/money";
 import { getLandingCopy } from "@/features/landing/copy";
 import { useLocale } from "@/features/landing/locale";
@@ -12,7 +15,14 @@ import { ThemeToggle } from "./ThemeToggle";
 
 export function TopBar() {
   const pathname = usePathname();
+  const router = useRouter();
   const fxRate = useFxRate();
+  const mockMode = isMockMode();
+  const role = useAuthStore((s) => s.user?.role);
+  const logout = useAuthStore((s) => s.logout);
+  const reset = useClassFlowStore((s) => s.reset);
+  const showSchedule = mockMode || role === "manager";
+  const showMine = mockMode || role === "teacher";
   const [locale, setLocale] = useLocale();
   const langCopy = getLandingCopy(locale).nav;
   const chrome = getManagerCopy(locale);
@@ -41,8 +51,8 @@ export function TopBar() {
         <span className="text-[14px] font-bold tracking-tight sm:text-[15px]">ClassFlow</span>
       </Link>
       <nav className="flex min-w-0 items-center gap-0.5 sm:gap-1" aria-label="View">
-        {tab("/manager", chrome.schedule)}
-        {tab("/teacher", chrome.mySchedule, "teacher-nav")}
+        {showSchedule && tab("/manager", chrome.schedule)}
+        {showMine && tab("/teacher", chrome.mySchedule, "teacher-nav")}
       </nav>
       <div className="ml-auto flex shrink-0 items-center gap-2 sm:gap-3">
         <span
@@ -61,6 +71,20 @@ export function TopBar() {
           />
         </div>
         <ThemeToggle />
+        {!mockMode && role && (
+          <button
+            type="button"
+            onClick={() => {
+              void logout().finally(() => {
+                reset();
+                router.replace("/login");
+              });
+            }}
+            className="text-[12px] font-medium text-ink-mute hover:text-ink sm:text-[13px]"
+          >
+            Log out
+          </button>
+        )}
       </div>
     </header>
   );

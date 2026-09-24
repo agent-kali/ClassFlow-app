@@ -16,15 +16,17 @@ Re-running is safe: every row is upserted by primary key.
 
 import argparse
 import datetime
+import os
 from decimal import Decimal
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import delete
+from sqlalchemy import delete, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
 from app.db import get_session_factory
+from app.auth import hash_password
 from app.models import (
     CampusModel,
     ClassGroupModel,
@@ -32,6 +34,7 @@ from app.models import (
     RoomModel,
     SchoolModel,
     TeacherModel,
+    UserModel,
 )
 
 AGENCY_TIMEZONE = ZoneInfo("Asia/Ho_Chi_Minh")
@@ -193,6 +196,69 @@ def delete_all_lessons(session: Session) -> None:
     session.execute(delete(LessonModel))
 
 
+# Local-development logins only. Created when CLASSFLOW_SEED_DEV_USERS=1.
+# Existing rows are left alone, including password_hash, so a re-seed never
+# resets a password. Emails are stored lowercase for ck_users_email_lowercase.
+DEV_USERS: list[dict[str, Any]] = [
+    {
+        "id": "usr-manager",
+        "email": "manager@localhost",
+        "role": "manager",
+        "teacher_id": None,
+        "password_env": "CLASSFLOW_DEV_MANAGER_PASSWORD",
+    },
+    {
+        "id": "usr-dav",
+        "email": "dav@localhost",
+        "role": "teacher",
+        "teacher_id": "t-dav",
+        "password_env": "CLASSFLOW_DEV_TEACHER_DAV_PASSWORD",
+    },
+    {
+        "id": "usr-mir",
+        "email": "mir@localhost",
+        "role": "teacher",
+        "teacher_id": "t-mir",
+        "password_env": "CLASSFLOW_DEV_TEACHER_MIR_PASSWORD",
+    },
+]
+
+
+def seed_dev_users(session: Session) -> list[str]:
+    """
+    Insert missing dev users. Returns the emails that were created.
+
+    Does nothing unless CLASSFLOW_SEED_DEV_USERS=1. Never updates an existing
+    user, and never prints a password.
+    """
+    if os.environ.get("CLASSFLOW_SEED_DEV_USERS") != "1":
+        return []
+    created: list[str] = []
+    for spec in DEV_USERS:
+        email = spec["email"]
+        existing = session.scalar(select(UserModel).where(UserModel.email == email))
+        if existing is not None:
+            continue
+        password = os.environ.get(spec["password_env"])
+        if not password:
+            raise SystemExit(
+                f"{spec['password_env']} is required to create {email}. "
+                "Refusing to invent a password."
+            )
+        session.add(
+            UserModel(
+                id=spec["id"],
+                email=email,
+                password_hash=hash_password(password),
+                role=spec["role"],
+                teacher_id=spec["teacher_id"],
+                active=True,
+            )
+        )
+        created.append(email)
+    return created
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Seed ClassFlow reference data.")
     parser.add_argument(
@@ -213,11 +279,14 @@ def main() -> None:
         seed_reference_data(session)
         if args.with_lessons:
             seed_smoke_lessons(session)
+        created_users = seed_dev_users(session)
         session.commit()
 
     summary = "reference data"
     if args.with_lessons:
         summary += f" + {len(SMOKE_LESSONS)} smoke lessons"
+    if created_users:
+        summary += f" + {len(created_users)} dev user(s)"
     print(f"Seeded {summary}.")
 
 

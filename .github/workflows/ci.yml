@@ -59,6 +59,8 @@ jobs:
           --health-retries 10
     env:
       TEST_DATABASE_URL: postgresql+psycopg://classflow:classflow@localhost:5432/classflow_test
+      AUTH_SECRET: test-secret-not-for-production-use-32b
+      COOKIE_SECURE: "false"
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
