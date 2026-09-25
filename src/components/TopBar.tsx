@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { Suspense } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { isGuestDemoEntry, type AppPath } from "@/data/access";
 import { useAuthStore } from "@/data/authStore";
@@ -15,8 +16,20 @@ import { LocaleToggle } from "./LocaleToggle";
 import { ThemeToggle } from "./ThemeToggle";
 
 export function TopBar() {
-  const pathname = usePathname();
+  return (
+    <Suspense fallback={<TopBarView tour={null} demo={null} />}>
+      <TopBarQuery />
+    </Suspense>
+  );
+}
+
+function TopBarQuery() {
   const searchParams = useSearchParams();
+  return <TopBarView tour={searchParams.get("tour")} demo={searchParams.get("demo")} />;
+}
+
+function TopBarView({ tour, demo }: { tour: string | null; demo: string | null }) {
+  const pathname = usePathname();
   const router = useRouter();
   const fxRate = useFxRate();
   const mockMode = isMockMode();
@@ -32,10 +45,7 @@ export function TopBar() {
   const guestDemo =
     !mockMode &&
     authStatus === "anonymous" &&
-    isGuestDemoEntry(path, {
-      tour: searchParams.get("tour"),
-      demo: searchParams.get("demo"),
-    });
+    isGuestDemoEntry(path, { tour, demo });
   const showSchedule = mockMode || guestDemo || role === "manager";
   const showMine = mockMode || guestDemo || role === "teacher";
   const scheduleHref = guestDemo ? "/manager?demo=1" : "/manager";
