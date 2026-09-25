@@ -4,7 +4,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { TopBar } from "@/components/TopBar";
 import { useLessons, useLookups, useTeachers, useToday } from "@/data/hooks";
-import { isGuestDemoEntry, resolveTeacherIdentity } from "@/data/access";
+import { isGuestDemoEntry, isGuestFixtureVisit, resolveTeacherIdentity } from "@/data/access";
 import { useAuthStore } from "@/data/authStore";
 import { isMockMode } from "@/data/client";
 import { applyLocaleFromNavigation, parseLangParam } from "@/features/landing/locale";
@@ -60,11 +60,13 @@ export function TeacherDashboard() {
   const router = useRouter();
   const guestDemo =
     !mockMode &&
-    authStatus === "anonymous" &&
-    isGuestDemoEntry("/teacher", {
-      tour: searchParams.get("tour"),
-      demo: searchParams.get("demo"),
-    });
+    isGuestFixtureVisit(
+      isGuestDemoEntry("/teacher", {
+        tour: searchParams.get("tour"),
+        demo: searchParams.get("demo"),
+      }),
+      authStatus
+    );
   const authenticatedTeacherId = useAuthStore((s) => s.user?.teacher?.id ?? null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const { teacherId, canSwitch } = resolveTeacherIdentity({

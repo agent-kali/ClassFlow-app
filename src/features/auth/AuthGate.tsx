@@ -15,8 +15,9 @@ import { useClassFlowStore } from "@/data/store";
 
 /**
  * Holds the schedule off screen until we know who is signed in, and until the
- * cache belongs to that person. A failed session check is a connection error,
- * not a silent switch to fixture data.
+ * cache belongs to that person. A failed session check on a bare schedule URL
+ * is a connection error. An explicit guest route can still show fixtures.
+ * A real session always wins over the guest source.
  */
 export function AuthGate({
   role,
@@ -58,7 +59,10 @@ export function AuthGate({
         guestDemo,
       });
   const showingGuest =
-    !isMockMode() && guestDemo && effectiveStatus === "anonymous" && decision === "render";
+    !isMockMode() &&
+    guestDemo &&
+    decision === "render" &&
+    (effectiveStatus === "anonymous" || effectiveStatus === "error");
   const needsReset =
     !sessionLost &&
     status === "authenticated" &&

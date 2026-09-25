@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
-import { GUEST_DEMO_OWNER, isGuestDemoEntry, type AppPath } from "./access";
+import { GUEST_DEMO_OWNER, isGuestDemoEntry, isGuestFixtureVisit, type AppPath } from "./access";
 import { isMockMode } from "./client";
 import { useAuthStore } from "./authStore";
 import { useScheduleStatus } from "./hooks";
@@ -28,11 +28,13 @@ export function ScheduleBoundary({ children }: { children: React.ReactNode }) {
       : "/manager";
   const guestDemo =
     !isMockMode() &&
-    authStatus === "anonymous" &&
-    isGuestDemoEntry(path, {
-      tour: searchParams.get("tour"),
-      demo: searchParams.get("demo"),
-    });
+    isGuestFixtureVisit(
+      isGuestDemoEntry(path, {
+        tour: searchParams.get("tour"),
+        demo: searchParams.get("demo"),
+      }),
+      authStatus
+    );
   const ownerId = guestDemo ? GUEST_DEMO_OWNER : userId;
 
   useEffect(() => {

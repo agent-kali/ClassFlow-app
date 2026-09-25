@@ -9,11 +9,27 @@ class Base(DeclarativeBase):
     pass
 
 
+def normalize_database_url(url: str) -> str:
+    """
+    Accept the URL shapes hosts actually provide.
+
+    Render's private connection string is `postgresql://`. SQLAlchemy needs the
+    psycopg driver in the scheme. Query parameters, including `sslmode`, stay.
+    """
+    if url.startswith("postgresql+psycopg://"):
+        return url
+    if url.startswith("postgresql://"):
+        return "postgresql+psycopg://" + url[len("postgresql://") :]
+    if url.startswith("postgres://"):
+        return "postgresql+psycopg://" + url[len("postgres://") :]
+    return url
+
+
 def get_database_url() -> str:
     url = os.environ.get("DATABASE_URL")
     if not url:
         raise RuntimeError("DATABASE_URL is not set")
-    return url
+    return normalize_database_url(url)
 
 
 # One engine (and so one connection pool) per URL, created on first use.

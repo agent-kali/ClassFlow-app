@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { isGuestDemoEntry, type AppPath } from "@/data/access";
+import { isGuestDemoEntry, isGuestFixtureVisit, type AppPath } from "@/data/access";
 import { useAuthStore } from "@/data/authStore";
 import { isMockMode } from "@/data/client";
 import { useFxRate } from "@/data/hooks";
@@ -43,9 +43,7 @@ function TopBarView({ tour, demo }: { tour: string | null; demo: string | null }
       ? "/login"
       : "/manager";
   const guestDemo =
-    !mockMode &&
-    authStatus === "anonymous" &&
-    isGuestDemoEntry(path, { tour, demo });
+    !mockMode && isGuestFixtureVisit(isGuestDemoEntry(path, { tour, demo }), authStatus);
   const showSchedule = mockMode || guestDemo || role === "manager";
   const showMine = mockMode || guestDemo || role === "teacher";
   const scheduleHref = guestDemo ? "/manager?demo=1" : "/manager";

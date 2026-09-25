@@ -19,7 +19,15 @@ export const GUEST_DEMO_OWNER = "guest-demo";
  * Public demo entry only. `tour=1` is the manager handoff from the landing.
  * `demo=1` keeps that visit on fixtures after the tour is dismissed, and is
  * how the teacher experience is opened. A bare schedule URL is not a demo.
+ *
+ * `isGuestFixtureVisit` is that entry plus an anonymous visitor, or the same
+ * entry when the session probe could not reach the API. A bare schedule URL
+ * never qualifies, even when the status is "error".
  */
+export function isGuestFixtureVisit(guestDemo: boolean, status: AuthStatus): boolean {
+  return guestDemo && (status === "anonymous" || status === "error");
+}
+
 export function isGuestDemoEntry(
   path: AppPath,
   params: { tour?: string | null; demo?: string | null }
@@ -41,7 +49,12 @@ export function decideRoute(input: {
     return input.path === "/login" ? "manager" : "render";
   }
   if (input.status === "loading") return "loading";
-  if (input.status === "error") return "error";
+  // A guest route can still show fixtures when the session probe cannot reach
+  // the API. A bare schedule URL stays an error and never becomes fixtures.
+  if (input.status === "error") {
+    if (input.guestDemo && input.path !== "/login") return "render";
+    return "error";
+  }
   if (input.status === "anonymous") {
     if (input.guestDemo && input.path !== "/login") return "render";
     return input.path === "/login" ? "render" : "login";

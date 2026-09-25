@@ -26,7 +26,7 @@ from app.catalog import (
     list_schools,
     list_teachers,
 )
-from app.db import get_db
+from app.db import get_db, get_engine
 from app.errors import ForbiddenError, register_error_handlers
 from app.models import UserModel
 from app.schemas import (
@@ -46,14 +46,31 @@ from app.schemas import (
     UserRole,
 )
 
+def require_database() -> None:
+    """Fail the process before it takes traffic if Postgres cannot be reached."""
+    from sqlalchemy import text
+
+    with get_engine().connect() as connection:
+        connection.execute(text("SELECT 1"))
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     require_auth_config()
+    require_database()
     yield
 
 
 app = FastAPI(title="ClassFlow API", lifespan=lifespan)
 register_error_handlers(app)
+
+
+@app.middleware("http")
+async def private_no_store(request: Request, call_next):
+    """Authenticated responses must not become a shared CDN cache entry."""
+    response = await call_next(request)
+    response.headers["Cache-Control"] = "private, no-store"
+    return response
 
 # Function scope: get_db() commit/rollback must finish before the response is
 # sent. Default request-scoped yield teardown would run after the body goes out.

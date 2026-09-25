@@ -3,6 +3,7 @@ import {
   decideRoute,
   GUEST_DEMO_OWNER,
   isGuestDemoEntry,
+  isGuestFixtureVisit,
   resolveTeacherIdentity,
   shouldResetScheduleCache,
 } from "./access";
@@ -62,11 +63,34 @@ describe("decideRoute", () => {
     ).toBe("render");
   });
 
-  it("keeps an auth failure off the fixture demo", () => {
+  it("treats only an explicit guest route as a fixture visit when the API is down", () => {
+    expect(isGuestFixtureVisit(true, "error")).toBe(true);
+    expect(isGuestFixtureVisit(true, "anonymous")).toBe(true);
+    expect(isGuestFixtureVisit(false, "error")).toBe(false);
+    expect(isGuestFixtureVisit(true, "authenticated")).toBe(false);
+  });
+
+  it("renders fixtures when a guest demo cannot reach the API", () => {
     expect(
       decideRoute({
         mockMode: false,
         path: "/manager",
+        status: "error",
+        guestDemo: true,
+      })
+    ).toBe("render");
+    expect(
+      decideRoute({
+        mockMode: false,
+        path: "/teacher",
+        status: "error",
+        guestDemo: true,
+      })
+    ).toBe("render");
+    expect(
+      decideRoute({
+        mockMode: false,
+        path: "/login",
         status: "error",
         guestDemo: true,
       })
