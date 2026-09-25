@@ -139,12 +139,27 @@ export function createClassFlowStore(source: DataSource) {
       return updated;
     };
 
-    /** Runs a mutation, recording the reason if the backend refuses it. */
+    /**
+     * Runs a mutation. A 401 uses the same session-lost signal as a failed
+     * load, so AuthGate can expire the session and leave the schedule.
+     * A 403, 404, 422, or network failure only records the message.
+     */
     const attempt = async <T>(run: () => Promise<T>): Promise<T> => {
       try {
         return await run();
       } catch (error) {
-        set({ mutationError: describeError(error) });
+        if (errorStatus(error) === 401) {
+          set({
+            ...EMPTY_COLLECTIONS,
+            status: "error",
+            loadError: describeError(error),
+            loadErrorStatus: 401,
+            loadedForUserId: null,
+            mutationError: describeError(error),
+          });
+        } else {
+          set({ mutationError: describeError(error) });
+        }
         throw error;
       }
     };

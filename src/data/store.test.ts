@@ -144,6 +144,51 @@ describe("initial load", () => {
     expect(store.getState().loadedForUserId).toBeNull();
   });
 
+  it("a 401 from a mutation clears the schedule and signals session loss", async () => {
+    const store = createClassFlowStore(
+      fakeSource({
+        listLessons: vi.fn(async () => [STORED]),
+        createLesson: vi.fn(async () => {
+          throw new ApiError(401, "unauthorized", "Authentication required.");
+        }),
+      })
+    );
+    await store.getState().load("usr-manager");
+    expect(store.getState().schools.length).toBeGreaterThan(0);
+    await expect(store.getState().createLesson(LESSON_INPUT)).rejects.toThrow(
+      "Authentication required."
+    );
+    const state = store.getState();
+    expect(state.lessons).toEqual([]);
+    expect(state.schools).toEqual([]);
+    expect(state.teachers).toEqual([]);
+    expect(state.classGroups).toEqual([]);
+    expect(state.loadedForUserId).toBeNull();
+    expect(state.loadErrorStatus).toBe(401);
+  });
+
+  it("a 403 from a mutation leaves the authenticated schedule in place", async () => {
+    const store = createClassFlowStore(
+      fakeSource({
+        listLessons: vi.fn(async () => [STORED]),
+        updateLesson: vi.fn(async () => {
+          throw new ApiError(403, "forbidden", "You do not have permission to do that.");
+        }),
+      })
+    );
+    await store.getState().load("usr-manager");
+    await expect(
+      store.getState().updateLesson(STORED.id, { curriculum: "nope" })
+    ).rejects.toThrow("You do not have permission to do that.");
+    const state = store.getState();
+    expect(state.status).toBe("ready");
+    expect(state.lessons).toEqual([STORED]);
+    expect(state.schools.length).toBeGreaterThan(0);
+    expect(state.loadedForUserId).toBe("usr-manager");
+    expect(state.loadErrorStatus).toBeNull();
+    expect(state.mutationError).toBe("You do not have permission to do that.");
+  });
+
   it("reports an error and no lessons when the backend is unreachable", async () => {
     const { store } = await readyStore({
       listLessons: vi.fn(async () => {

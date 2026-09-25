@@ -78,8 +78,11 @@ def health() -> dict[str, str]:
 
 
 @app.post("/auth/login", response_model=AuthUser, response_model_exclude_none=True)
-def login(body: LoginBody, response: Response, db: DbSession) -> AuthUser:
+def login(body: LoginBody, request: Request, response: Response, db: DbSession) -> AuthUser:
+    # Authenticate before touching the current cookie. A wrong password must
+    # leave the browser's existing session row in place.
     user = authenticate(db, body.email, body.password)
+    revoke_token(db, request.cookies.get(COOKIE_NAME))
     set_session_cookie(response, create_session(db, user))
     return to_auth_user(db, user)
 
