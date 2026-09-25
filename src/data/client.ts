@@ -21,6 +21,7 @@ export function isMockMode(): boolean {
 export const API_BASE_URL = "/api";
 
 let cached: DataSource | null = null;
+let guestDemo: DataSource | null = null;
 
 export function getDataSource(): DataSource {
   if (!cached) {
@@ -29,4 +30,14 @@ export function getDataSource(): DataSource {
       : createHttpSource({ baseUrl: API_BASE_URL });
   }
   return cached;
+}
+
+/**
+ * Fixture schedule for an explicit guest demo visit. Separate from
+ * `getDataSource()` so a failed API call or a signed-in session never lands
+ * here. Lost on refresh, same as the mock build.
+ */
+export function getGuestDemoSource(): DataSource {
+  if (!guestDemo) guestDemo = createMockSource();
+  return guestDemo;
 }

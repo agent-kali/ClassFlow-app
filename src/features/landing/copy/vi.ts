@@ -7,6 +7,7 @@ export const vi: LandingCopy = {
     teacher: "Góc giáo viên",
     architecture: "Kiến trúc",
     exploreDemo: "Xem demo trực tiếp",
+    signIn: "Đăng nhập",
     openMenu: "Mở menu",
     closeMenu: "Đóng menu",
     langEn: "EN",

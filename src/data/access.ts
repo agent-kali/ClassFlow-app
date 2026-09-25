@@ -12,11 +12,30 @@ export function homeForRole(role: AppRole): "/manager" | "/teacher" {
   return role === "manager" ? "/manager" : "/teacher";
 }
 
+/** Cache owner for an explicit fixture demo. Never a real account id. */
+export const GUEST_DEMO_OWNER = "guest-demo";
+
+/**
+ * Public demo entry only. `tour=1` is the manager handoff from the landing.
+ * `demo=1` keeps that visit on fixtures after the tour is dismissed, and is
+ * how the teacher experience is opened. A bare schedule URL is not a demo.
+ */
+export function isGuestDemoEntry(
+  path: AppPath,
+  params: { tour?: string | null; demo?: string | null }
+): boolean {
+  if (path === "/login") return false;
+  if (params.demo === "1") return true;
+  return path === "/manager" && params.tour === "1";
+}
+
 export function decideRoute(input: {
   mockMode: boolean;
   path: AppPath;
   status: AuthStatus;
   role?: AppRole;
+  /** Explicit fixture visit. Ignored unless the visitor is anonymous. */
+  guestDemo?: boolean;
 }): RouteDecision {
   if (input.mockMode) {
     return input.path === "/login" ? "manager" : "render";
@@ -24,6 +43,7 @@ export function decideRoute(input: {
   if (input.status === "loading") return "loading";
   if (input.status === "error") return "error";
   if (input.status === "anonymous") {
+    if (input.guestDemo && input.path !== "/login") return "render";
     return input.path === "/login" ? "render" : "login";
   }
   const role = input.role;
@@ -39,10 +59,11 @@ export function decideRoute(input: {
  */
 export function resolveTeacherIdentity(input: {
   mockMode: boolean;
+  guestDemo?: boolean;
   selectedId: string | null;
   authenticatedTeacherId: string | null;
 }): { teacherId: string | null; canSwitch: boolean } {
-  if (input.mockMode) {
+  if (input.mockMode || input.guestDemo) {
     return { teacherId: input.selectedId, canSwitch: true };
   }
   return { teacherId: input.authenticatedTeacherId, canSwitch: false };

@@ -12,6 +12,8 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useAuthStore } from "@/data/authStore";
+import { isMockMode } from "@/data/client";
 import { LocaleToggle } from "@/components/LocaleToggle";
 import {
   applyLocaleFromNavigation,
@@ -133,6 +135,11 @@ export function ManagerTour({
     setDismissed(true);
     const next = new URLSearchParams(searchParams.toString());
     next.delete("tour");
+    // tour=1 is the guest entry. Keep an explicit demo flag so dismissing
+    // the tour does not bounce an anonymous visitor to login.
+    if (!isMockMode() && useAuthStore.getState().status === "anonymous") {
+      next.set("demo", "1");
+    }
     const qs = next.toString();
     const url = qs ? `${pathname}?${qs}` : pathname;
     router.replace(url, { scroll: false });
@@ -295,7 +302,7 @@ export function ManagerTour({
                 {i === 2 ? (
                   <div className="mt-3 flex flex-wrap items-center gap-2">
                     <Link
-                      href="/teacher"
+                      href="/teacher?demo=1"
                       className="rounded bg-accent px-2.5 py-1.5 text-[12px] font-semibold text-accent-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
                     >
                       {copy.openTeacher}

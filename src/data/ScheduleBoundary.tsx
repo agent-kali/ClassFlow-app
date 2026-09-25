@@ -1,6 +1,9 @@
 "use client";
 
 import { useEffect } from "react";
+import { usePathname, useSearchParams } from "next/navigation";
+import { GUEST_DEMO_OWNER, isGuestDemoEntry, type AppPath } from "./access";
+import { isMockMode } from "./client";
 import { useAuthStore } from "./authStore";
 import { useScheduleStatus } from "./hooks";
 import { useClassFlowStore } from "./store";
@@ -13,12 +16,28 @@ import { useClassFlowStore } from "./store";
  */
 export function ScheduleBoundary({ children }: { children: React.ReactNode }) {
   const { status, error, load } = useScheduleStatus();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const authStatus = useAuthStore((s) => s.status);
   const userId = useAuthStore((s) => s.user?.id ?? null);
   const loadErrorStatus = useClassFlowStore((s) => s.loadErrorStatus);
+  const path: AppPath = pathname.startsWith("/teacher")
+    ? "/teacher"
+    : pathname.startsWith("/login")
+      ? "/login"
+      : "/manager";
+  const guestDemo =
+    !isMockMode() &&
+    authStatus === "anonymous" &&
+    isGuestDemoEntry(path, {
+      tour: searchParams.get("tour"),
+      demo: searchParams.get("demo"),
+    });
+  const ownerId = guestDemo ? GUEST_DEMO_OWNER : userId;
 
   useEffect(() => {
-    if (status === "idle") void load(userId);
-  }, [status, load, userId]);
+    if (status === "idle") void load(ownerId);
+  }, [status, load, ownerId]);
 
   if (loadErrorStatus === 401) {
     return (

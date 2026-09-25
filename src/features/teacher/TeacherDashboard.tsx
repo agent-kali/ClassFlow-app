@@ -1,11 +1,13 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { TopBar } from "@/components/TopBar";
 import { useLessons, useLookups, useTeachers, useToday } from "@/data/hooks";
-import { resolveTeacherIdentity } from "@/data/access";
+import { isGuestDemoEntry, resolveTeacherIdentity } from "@/data/access";
 import { useAuthStore } from "@/data/authStore";
 import { isMockMode } from "@/data/client";
+import { applyLocaleFromNavigation, parseLangParam } from "@/features/landing/locale";
 import type { Instant } from "@/domain/earnings";
 import { EarningsPanel } from "./EarningsPanel";
 import { NextLessonBanner } from "./NextLessonBanner";
@@ -52,13 +54,36 @@ export function TeacherDashboard() {
   const asOf = useAsOf(today);
 
   const mockMode = isMockMode();
+  const authStatus = useAuthStore((s) => s.status);
+  const searchParams = useSearchParams();
+  const pathname = usePathname();
+  const router = useRouter();
+  const guestDemo =
+    !mockMode &&
+    authStatus === "anonymous" &&
+    isGuestDemoEntry("/teacher", {
+      tour: searchParams.get("tour"),
+      demo: searchParams.get("demo"),
+    });
   const authenticatedTeacherId = useAuthStore((s) => s.user?.teacher?.id ?? null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const { teacherId, canSwitch } = resolveTeacherIdentity({
     mockMode,
+    guestDemo,
     selectedId: selectedId ?? teachers[0]?.id ?? null,
     authenticatedTeacherId,
   });
+
+  useEffect(() => {
+    if (!guestDemo || !searchParams.has("lang")) return;
+    const fromQuery = parseLangParam(searchParams.get("lang"));
+    if (fromQuery) applyLocaleFromNavigation(fromQuery);
+    const next = new URLSearchParams(searchParams.toString());
+    next.delete("lang");
+    const qs = next.toString();
+    const url = qs ? `${pathname}?${qs}` : pathname;
+    router.replace(url, { scroll: false });
+  }, [guestDemo, searchParams, pathname, router]);
   const teacher = teachers.find((t) => t.id === teacherId);
 
   const [scheduleMode, setScheduleMode] = useState<PeriodMode>("week");

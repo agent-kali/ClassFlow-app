@@ -5,6 +5,7 @@ export interface LandingCopy {
     teacher: string;
     architecture: string;
     exploreDemo: string;
+    signIn: string;
     openMenu: string;
     closeMenu: string;
     langEn: string;

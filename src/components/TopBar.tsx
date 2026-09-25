@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { isGuestDemoEntry, type AppPath } from "@/data/access";
 import { useAuthStore } from "@/data/authStore";
 import { isMockMode } from "@/data/client";
 import { useFxRate } from "@/data/hooks";
@@ -15,20 +16,37 @@ import { ThemeToggle } from "./ThemeToggle";
 
 export function TopBar() {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const router = useRouter();
   const fxRate = useFxRate();
   const mockMode = isMockMode();
+  const authStatus = useAuthStore((s) => s.status);
   const role = useAuthStore((s) => s.user?.role);
   const logout = useAuthStore((s) => s.logout);
   const reset = useClassFlowStore((s) => s.reset);
-  const showSchedule = mockMode || role === "manager";
-  const showMine = mockMode || role === "teacher";
+  const path: AppPath = pathname.startsWith("/teacher")
+    ? "/teacher"
+    : pathname.startsWith("/login")
+      ? "/login"
+      : "/manager";
+  const guestDemo =
+    !mockMode &&
+    authStatus === "anonymous" &&
+    isGuestDemoEntry(path, {
+      tour: searchParams.get("tour"),
+      demo: searchParams.get("demo"),
+    });
+  const showSchedule = mockMode || guestDemo || role === "manager";
+  const showMine = mockMode || guestDemo || role === "teacher";
+  const scheduleHref = guestDemo ? "/manager?demo=1" : "/manager";
+  const teacherHref = guestDemo ? "/teacher?demo=1" : "/teacher";
   const [locale, setLocale] = useLocale();
   const langCopy = getLandingCopy(locale).nav;
   const chrome = getManagerCopy(locale);
 
   const tab = (href: string, label: string, tourId?: string) => {
-    const active = pathname.startsWith(href);
+    const hrefPath = href.split("?")[0] ?? href;
+    const active = pathname.startsWith(hrefPath);
     return (
       <Link
         href={href}
@@ -51,8 +69,8 @@ export function TopBar() {
         <span className="text-[14px] font-bold tracking-tight sm:text-[15px]">ClassFlow</span>
       </Link>
       <nav className="flex min-w-0 items-center gap-0.5 sm:gap-1" aria-label="View">
-        {showSchedule && tab("/manager", chrome.schedule)}
-        {showMine && tab("/teacher", chrome.mySchedule, "teacher-nav")}
+        {showSchedule && tab(scheduleHref, chrome.schedule)}
+        {showMine && tab(teacherHref, chrome.mySchedule, "teacher-nav")}
       </nav>
       <div className="ml-auto flex shrink-0 items-center gap-2 sm:gap-3">
         <span

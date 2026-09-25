@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { decideRoute, resolveTeacherIdentity, shouldResetScheduleCache } from "./access";
+import {
+  decideRoute,
+  GUEST_DEMO_OWNER,
+  isGuestDemoEntry,
+  resolveTeacherIdentity,
+  shouldResetScheduleCache,
+} from "./access";
 
 describe("decideRoute", () => {
   it("keeps the mock demo on the schedule without a login", () => {
@@ -12,6 +18,59 @@ describe("decideRoute", () => {
     expect(decideRoute({ mockMode: true, path: "/login", status: "anonymous" })).toBe(
       "manager"
     );
+  });
+
+  it("renders an anonymous guest demo and still sends a bare visit to login", () => {
+    expect(
+      decideRoute({
+        mockMode: false,
+        path: "/manager",
+        status: "anonymous",
+        guestDemo: true,
+      })
+    ).toBe("render");
+    expect(
+      decideRoute({
+        mockMode: false,
+        path: "/teacher",
+        status: "anonymous",
+        guestDemo: true,
+      })
+    ).toBe("render");
+    expect(
+      decideRoute({
+        mockMode: false,
+        path: "/manager",
+        status: "anonymous",
+        guestDemo: false,
+      })
+    ).toBe("login");
+    expect(
+      decideRoute({
+        mockMode: false,
+        path: "/teacher",
+        status: "anonymous",
+      })
+    ).toBe("login");
+    expect(
+      decideRoute({
+        mockMode: false,
+        path: "/login",
+        status: "anonymous",
+        guestDemo: true,
+      })
+    ).toBe("render");
+  });
+
+  it("keeps an auth failure off the fixture demo", () => {
+    expect(
+      decideRoute({
+        mockMode: false,
+        path: "/manager",
+        status: "error",
+        guestDemo: true,
+      })
+    ).toBe("error");
   });
 
   it("sends an anonymous visitor to login and waits while the session loads", () => {
@@ -76,6 +135,18 @@ describe("decideRoute", () => {
   });
 });
 
+describe("isGuestDemoEntry", () => {
+  it("treats the manager tour and an explicit demo flag as the public demo", () => {
+    expect(isGuestDemoEntry("/manager", { tour: "1", demo: null })).toBe(true);
+    expect(isGuestDemoEntry("/manager", { tour: null, demo: "1" })).toBe(true);
+    expect(isGuestDemoEntry("/teacher", { tour: null, demo: "1" })).toBe(true);
+    expect(isGuestDemoEntry("/teacher", { tour: "1", demo: null })).toBe(false);
+    expect(isGuestDemoEntry("/manager", { tour: null, demo: null })).toBe(false);
+    expect(isGuestDemoEntry("/teacher", { tour: null, demo: null })).toBe(false);
+    expect(isGuestDemoEntry("/login", { tour: "1", demo: "1" })).toBe(false);
+  });
+});
+
 describe("resolveTeacherIdentity", () => {
   it("lets mock mode switch teachers", () => {
     expect(
@@ -83,6 +154,17 @@ describe("resolveTeacherIdentity", () => {
         mockMode: true,
         selectedId: "t-mir",
         authenticatedTeacherId: "t-dav",
+      })
+    ).toEqual({ teacherId: "t-mir", canSwitch: true });
+  });
+
+  it("lets a guest demo switch teachers", () => {
+    expect(
+      resolveTeacherIdentity({
+        mockMode: false,
+        guestDemo: true,
+        selectedId: "t-mir",
+        authenticatedTeacherId: null,
       })
     ).toEqual({ teacherId: "t-mir", canSwitch: true });
   });
@@ -107,6 +189,17 @@ describe("shouldResetScheduleCache", () => {
         sessionLost: false,
       })
     ).toBe(false);
+  });
+
+  it("drops a guest fixture cache when a real user signs in", () => {
+    expect(GUEST_DEMO_OWNER).toBe("guest-demo");
+    expect(
+      shouldResetScheduleCache({
+        loadedForUserId: GUEST_DEMO_OWNER,
+        nextUserId: "usr-manager",
+        sessionLost: false,
+      })
+    ).toBe(true);
   });
 
   it("resets when the user changes, on logout, and on 401", () => {

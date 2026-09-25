@@ -1,9 +1,15 @@
 "use client";
 
 import { useEffect, useLayoutEffect } from "react";
-import { useRouter } from "next/navigation";
-import { isMockMode } from "@/data/client";
-import { decideRoute, shouldResetScheduleCache, type AppRole } from "@/data/access";
+import { useRouter, useSearchParams } from "next/navigation";
+import { getDataSource, getGuestDemoSource, isMockMode } from "@/data/client";
+import {
+  decideRoute,
+  GUEST_DEMO_OWNER,
+  isGuestDemoEntry,
+  shouldResetScheduleCache,
+  type AppRole,
+} from "@/data/access";
 import { useAuthStore } from "@/data/authStore";
 import { useClassFlowStore } from "@/data/store";
 
@@ -20,7 +26,12 @@ export function AuthGate({
   children: React.ReactNode;
 }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const path = role === "manager" ? "/manager" : "/teacher";
+  const guestDemo = isGuestDemoEntry(path, {
+    tour: searchParams.get("tour"),
+    demo: searchParams.get("demo"),
+  });
   const status = useAuthStore((s) => s.status);
   const user = useAuthStore((s) => s.user);
   const error = useAuthStore((s) => s.error);
@@ -36,6 +47,18 @@ export function AuthGate({
   }, [status, bootstrap]);
 
   const sessionLost = loadErrorStatus === 401;
+  const effectiveStatus = sessionLost ? "anonymous" : status;
+  const decision = isMockMode()
+    ? "render"
+    : decideRoute({
+        mockMode: false,
+        path,
+        status: effectiveStatus,
+        role: user?.role,
+        guestDemo,
+      });
+  const showingGuest =
+    !isMockMode() && guestDemo && effectiveStatus === "anonymous" && decision === "render";
   const needsReset =
     !sessionLost &&
     status === "authenticated" &&
@@ -48,22 +71,26 @@ export function AuthGate({
 
   useLayoutEffect(() => {
     if (isMockMode()) return;
+    if (showingGuest) {
+      useClassFlowStore.getState().setSource(getGuestDemoSource());
+      if (sessionLost) expire();
+      const state = useClassFlowStore.getState();
+      const foreignOwner =
+        state.loadedForUserId !== null && state.loadedForUserId !== GUEST_DEMO_OWNER;
+      const staleProduct =
+        state.loadedForUserId !== GUEST_DEMO_OWNER &&
+        (state.status === "ready" || state.status === "error");
+      if (foreignOwner || staleProduct) reset();
+      return;
+    }
+    useClassFlowStore.getState().setSource(getDataSource());
     if (sessionLost) {
       expire();
       reset();
       return;
     }
     if (needsReset) reset();
-  }, [sessionLost, needsReset, expire, reset]);
-
-  const decision = isMockMode()
-    ? "render"
-    : decideRoute({
-        mockMode: false,
-        path,
-        status: sessionLost ? "anonymous" : status,
-        role: user?.role,
-      });
+  }, [showingGuest, sessionLost, needsReset, expire, reset]);
 
   useEffect(() => {
     if (isMockMode()) return;

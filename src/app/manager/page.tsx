@@ -54,13 +54,13 @@ import { useTourActive } from "@/features/tour/useTourActive";
 export default function ManagerPage() {
   return (
     <ClientOnly>
-      <AuthGate role="manager">
-        <Suspense fallback={null}>
+      <Suspense fallback={null}>
+        <AuthGate role="manager">
           <ScheduleBoundary>
             <ManagerScreen />
           </ScheduleBoundary>
-        </Suspense>
-      </AuthGate>
+        </AuthGate>
+      </Suspense>
     </ClientOnly>
   );
 }

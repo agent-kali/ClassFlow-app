@@ -28,6 +28,7 @@ function StableLabel({ current, candidates }: { current: string; candidates: str
 }
 
 const DEMO_CTA_LABELS = [landingCopy.en.nav.exploreDemo, landingCopy.vi.nav.exploreDemo];
+const SIGN_IN_LABELS = [landingCopy.en.nav.signIn, landingCopy.vi.nav.signIn];
 const OPEN_MENU_LABELS = [landingCopy.en.nav.openMenu, landingCopy.vi.nav.openMenu];
 const CLOSE_MENU_LABELS = [landingCopy.en.nav.closeMenu, landingCopy.vi.nav.closeMenu];
 
@@ -90,6 +91,13 @@ export function LandingNav({
           />
 
           <Link
+            href="/login"
+            className="hidden rounded px-2.5 py-1.5 text-[12px] font-semibold text-ink-mute transition-colors hover:bg-line-soft hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent sm:inline-flex"
+          >
+            <StableLabel current={copy.nav.signIn} candidates={SIGN_IN_LABELS} />
+          </Link>
+
+          <Link
             href={demoHref(locale)}
             className="hidden rounded bg-accent px-3 py-1.5 text-[12px] font-semibold text-accent-ink transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent sm:inline-flex"
           >
@@ -127,6 +135,13 @@ export function LandingNav({
                 {copy.nav[link.key]}
               </a>
             ))}
+            <Link
+              href="/login"
+              onClick={close}
+              className="mt-2 rounded border border-line px-3 py-2 text-center text-[13px] font-semibold"
+            >
+              {copy.nav.signIn}
+            </Link>
             <Link
               href={demoHref(locale)}
               onClick={close}

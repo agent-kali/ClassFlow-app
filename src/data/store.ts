@@ -62,6 +62,8 @@ interface ClassFlowState {
   mutationError: string | null;
 
   load(userId?: string | null): Promise<void>;
+  /** Point later reads and writes at a different source. Does not touch the cache. */
+  setSource(source: DataSource): void;
   /** Drop every cached row so the next identity cannot see the previous one. */
   reset(): void;
   clearMutationError(): void;
@@ -115,6 +117,7 @@ const EMPTY_COLLECTIONS = {
 };
 
 export function createClassFlowStore(source: DataSource) {
+  let active = source;
   return create<ClassFlowState>((set, get) => {
     /** Replaces a lesson in the cache and emits the pay delta it caused. */
     const applyUpdated = (updated: Lesson) => {
@@ -184,7 +187,7 @@ export function createClassFlowStore(source: DataSource) {
         if (get().status === "loading") return;
         set({ status: "loading", loadError: null, loadErrorStatus: null });
         try {
-          const snapshot = await loadSchedule(source);
+          const snapshot = await loadSchedule(active);
           set({
             ...snapshot,
             today: toIsoDate(new Date()),
@@ -207,6 +210,10 @@ export function createClassFlowStore(source: DataSource) {
         }
       },
 
+      setSource(next) {
+        active = next;
+      },
+
       reset() {
         set({
           ...EMPTY_COLLECTIONS,
@@ -224,7 +231,7 @@ export function createClassFlowStore(source: DataSource) {
       },
 
       async createLesson(input) {
-        const created = await attempt(() => source.createLesson(input));
+        const created = await attempt(() => active.createLesson(input));
         const deltaUsd = payableUsd(created, get().teachers);
         set((s) => ({
           lessons: [...s.lessons, created],
@@ -237,7 +244,7 @@ export function createClassFlowStore(source: DataSource) {
       },
 
       async updateLesson(id, patch) {
-        return applyUpdated(await attempt(() => source.updateLesson(id, patch)));
+        return applyUpdated(await attempt(() => active.updateLesson(id, patch)));
       },
 
       async editLesson(id, patch) {
@@ -255,19 +262,19 @@ export function createClassFlowStore(source: DataSource) {
       },
 
       async setLessonStatus(id, status) {
-        return applyUpdated(await attempt(() => source.setLessonStatus(id, status)));
+        return applyUpdated(await attempt(() => active.setLessonStatus(id, status)));
       },
 
       async rescheduleLesson(id, date, startMin, endMin) {
         // movedFrom is derived by the backend, which is why the response and
         // not the request is what updates the cache.
         return applyUpdated(
-          await attempt(() => source.rescheduleLesson(id, date, startMin, endMin))
+          await attempt(() => active.rescheduleLesson(id, date, startMin, endMin))
         );
       },
 
       async deleteLesson(id) {
-        await attempt(() => source.deleteLesson(id));
+        await attempt(() => active.deleteLesson(id));
         set((s) => {
           const removed = s.lessons.find((l) => l.id === id);
           const deltaUsd = removed ? -payableUsd(removed, s.teachers) : 0;
@@ -288,7 +295,7 @@ export function createClassFlowStore(source: DataSource) {
       },
 
       async importLessons(inputs) {
-        const created = await attempt(() => source.importLessons(inputs));
+        const created = await attempt(() => active.importLessons(inputs));
         set((s) => ({
           lessons: [...s.lessons, ...created],
           mutationError: null,

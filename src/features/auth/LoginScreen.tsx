@@ -33,6 +33,7 @@ export function LoginScreen() {
     path: "/login",
     status: isMockMode() ? "anonymous" : status,
     role: user?.role,
+    guestDemo: false,
   });
 
   useEffect(() => {
