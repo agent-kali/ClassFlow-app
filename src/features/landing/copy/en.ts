@@ -7,6 +7,7 @@ export const en: LandingCopy = {
     teacher: "Teacher view",
     architecture: "Architecture",
     exploreDemo: "Explore live demo",
+    signIn: "Sign in",
     openMenu: "Open menu",
     closeMenu: "Close menu",
     langEn: "EN",

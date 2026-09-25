@@ -130,4 +130,10 @@ describe("locale store", () => {
     expect(demoHref("vi")).toBe("/manager?tour=1&lang=vi");
     expect(demoHref("en")).toBe("/manager?tour=1&lang=en");
   });
+
+  it("keeps the teacher demo on an explicit fixture entry", async () => {
+    const { teacherDemoHref } = await loadLocale();
+    expect(teacherDemoHref("en")).toBe("/teacher?demo=1&lang=en");
+    expect(teacherDemoHref("vi")).toBe("/teacher?demo=1&lang=vi");
+  });
 });

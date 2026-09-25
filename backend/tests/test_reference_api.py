@@ -81,8 +81,8 @@ def test_teachers_come_from_the_database(seeded_client: TestClient) -> None:
     assert by_id["t-oli"]["usdRate"] == 23.5
 
 
-def test_teachers_are_empty_without_rows(client: TestClient) -> None:
-    assert client.get("/teachers").json() == []
+def test_teachers_are_empty_without_rows(authenticated_client: TestClient) -> None:
+    assert authenticated_client.get("/teachers").json() == []
 
 
 def test_reference_lists_are_deterministically_ordered(
@@ -94,8 +94,8 @@ def test_reference_lists_are_deterministically_ordered(
     assert codes == sorted(codes)
 
 
-def test_fx_rate_is_a_single_captured_rate(client: TestClient) -> None:
-    response = client.get("/fx-rate")
+def test_fx_rate_is_a_single_captured_rate(authenticated_client: TestClient) -> None:
+    response = authenticated_client.get("/fx-rate")
     assert response.status_code == 200
     body = response.json()
     assert body["vndPerUsd"] == 26150.0

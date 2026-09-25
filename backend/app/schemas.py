@@ -97,6 +97,11 @@ class FxRate(BaseModel):
         return _require_iso_date(value)
 
 
+class UserRole(str, Enum):
+    manager = "manager"
+    teacher = "teacher"
+
+
 class LessonStatus(str, Enum):
     scheduled = "scheduled"
     cancelled = "cancelled"
@@ -202,6 +207,39 @@ class SetLessonStatusBody(BaseModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
     status: LessonStatus
+
+
+class AuthTeacher(BaseModel):
+    """The teacher identity a login is allowed to see. No pay rate."""
+
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    id: str
+    code: str
+    name: str
+
+
+class AuthUser(BaseModel):
+    """Safe session identity. Never includes a password hash or session token."""
+
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    id: str
+    email: str
+    role: UserRole
+    teacher: AuthTeacher | None = None
+
+
+class LoginBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    email: str = Field(min_length=1)
+    password: str = Field(min_length=1)
+
+    @field_validator("email")
+    @classmethod
+    def email_is_lowercase(cls, value: str) -> str:
+        return value.strip().lower()
 
 
 class RescheduleLessonBody(BaseModel):

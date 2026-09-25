@@ -95,3 +95,8 @@ export function parseLangParam(value: string | null | undefined): Locale | null 
 export function demoHref(locale: Locale): string {
   return `/manager?tour=1&lang=${locale}`;
 }
+
+/** Teacher fixture visit. `demo=1` is the explicit guest entry; bare `/teacher` stays behind login. */
+export function teacherDemoHref(locale: Locale): string {
+  return `/teacher?demo=1&lang=${locale}`;
+}

@@ -83,6 +83,7 @@ export function createHttpSource(options: HttpSourceOptions = {}): DataSource {
     try {
       response = await doFetch(`${baseUrl}${path}`, {
         method: init?.method ?? "GET",
+        credentials: "same-origin",
         headers: hasBody ? { "Content-Type": "application/json" } : undefined,
         body: hasBody ? JSON.stringify(init.body) : undefined,
       });

@@ -5,6 +5,7 @@ the rows their foreign keys point at exist.
 
 import datetime
 
+import pytest
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -15,12 +16,14 @@ from app.models import (
     RoomModel,
     SchoolModel,
     TeacherModel,
+    UserModel,
 )
 from app.seed import (
     CLASS_GROUPS,
     ROOMS,
     SMOKE_LESSONS,
     monday_of_current_week,
+    seed_dev_users,
     seed_reference_data,
     seed_smoke_lessons,
 )
@@ -125,6 +128,46 @@ def test_monday_of_current_week_is_a_monday() -> None:
     assert monday_of_current_week(datetime.date(2026, 9, 17)) == datetime.date(
         2026, 9, 14
     )
+
+
+def test_dev_users_are_skipped_unless_requested(db_session: Session, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("CLASSFLOW_SEED_DEV_USERS", raising=False)
+    seed_reference_data(db_session)
+    assert seed_dev_users(db_session) == []
+    assert _count(db_session, UserModel) == 0
+
+
+def test_dev_users_are_created_once_and_do_not_reset_passwords(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("CLASSFLOW_SEED_DEV_USERS", "1")
+    monkeypatch.setenv("CLASSFLOW_DEV_MANAGER_PASSWORD", "manager-local")
+    monkeypatch.setenv("CLASSFLOW_DEV_TEACHER_DAV_PASSWORD", "dav-local")
+    monkeypatch.setenv("CLASSFLOW_DEV_TEACHER_MIR_PASSWORD", "mir-local")
+    seed_reference_data(db_session)
+    created = seed_dev_users(db_session)
+    db_session.flush()
+    assert created == ["manager@localhost", "dav@localhost", "mir@localhost"]
+    stored = db_session.scalar(select(UserModel).where(UserModel.email == "manager@localhost"))
+    assert stored is not None
+    original_hash = stored.password_hash
+    assert stored.teacher_id is None
+    dav = db_session.scalar(select(UserModel).where(UserModel.email == "dav@localhost"))
+    assert dav is not None and dav.teacher_id == "t-dav"
+    monkeypatch.setenv("CLASSFLOW_DEV_MANAGER_PASSWORD", "a-different-password")
+    assert seed_dev_users(db_session) == []
+    db_session.refresh(stored)
+    assert stored.password_hash == original_hash
+
+
+def test_dev_user_seed_refuses_a_missing_password(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("CLASSFLOW_SEED_DEV_USERS", "1")
+    monkeypatch.delenv("CLASSFLOW_DEV_MANAGER_PASSWORD", raising=False)
+    seed_reference_data(db_session)
+    with pytest.raises(SystemExit):
+        seed_dev_users(db_session)
 
 
 def test_seeded_lessons_reference_seeded_rooms_and_groups() -> None:

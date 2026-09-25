@@ -8,7 +8,7 @@ Every partner school emails its schedule as a differently-shaped spreadsheet. Cl
 
 **Live demo:** [class-flow-app.vercel.app](https://class-flow-app.vercel.app) · [manager](https://class-flow-app.vercel.app/manager) · [teacher](https://class-flow-app.vercel.app/teacher)
 
-**Status:** the manager's schedule is persisted in PostgreSQL through FastAPI. Create, edit, move, cancel, delete and import all survive a refresh. Still no auth. The hosted demo above runs on in-memory fixtures, because it has no backend deployed.
+**Status:** the manager's schedule is persisted in PostgreSQL through FastAPI, and both screens require a signed-in user. A manager sees the agency schedule and is the only role that can change it. A teacher sees only their own lessons and earnings. The hosted demo above runs on in-memory fixtures, because it has no backend deployed.
 
 ## Run it
 
@@ -32,14 +32,40 @@ source .venv/bin/activate
 python -m pip install -r requirements.txt
 
 export DATABASE_URL=postgresql+psycopg://classflow:classflow@localhost:5432/classflow
+export AUTH_SECRET="$(python -c 'import secrets; print(secrets.token_urlsafe(32))')"
+export COOKIE_SECURE=false
 python -m alembic upgrade head   # create the schema
 python -m app.seed               # teachers, schools, campuses, rooms, class groups
 python -m uvicorn app.main:app --reload
 ```
 
+`AUTH_SECRET` must be at least 32 bytes. The process refuses to start without it, and there is no default. `COOKIE_SECURE=false` is for this local HTTP setup. A production deployment sets `COOKIE_SECURE=true` so the session cookie is marked Secure.
+
 Health check: [http://127.0.0.1:8000/health](http://127.0.0.1:8000/health)
 
 The seed inserts only **reference data** — the rows a lesson's foreign keys need. It creates no lessons, because an empty schedule is a valid starting state: open the manager and add the first lesson yourself. Add `--with-lessons` for a small deterministic week that exercises a cancellation, a no-show, a recorded move, a double-booking and a tight travel gap. Both are idempotent, so re-running changes nothing.
+
+### Development logins
+
+Reference data does not create passwords. Local accounts are opt-in and are not for production:
+
+```bash
+export CLASSFLOW_SEED_DEV_USERS=1
+export CLASSFLOW_DEV_MANAGER_PASSWORD='replace-with-a-local-password'
+export CLASSFLOW_DEV_TEACHER_DAV_PASSWORD='replace-with-a-local-password'
+export CLASSFLOW_DEV_TEACHER_MIR_PASSWORD='replace-with-a-local-password'
+python -m app.seed
+```
+
+| Email | Role | Teacher |
+| --- | --- | --- |
+| `manager@localhost` | manager | — |
+| `dav@localhost` | teacher | David Okafor (`t-dav`) |
+| `mir@localhost` | teacher | Mira Novak (`t-mir`) |
+
+Sign in at [http://localhost:3000/login](http://localhost:3000/login). The password is whatever you exported. If that email already exists, the seed leaves the row alone, including the password hash. Delete the user row to change a local password. The seed never prints a password.
+
+The browser talks only to `http://localhost:3000/api/...`. Next.js forwards that to FastAPI. Do not point the browser at port 8000 for logged-in traffic: the session cookie is for the Next origin.
 
 ### 3. Frontend
 
@@ -48,7 +74,7 @@ npm install
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000). The browser calls `/api/*` on its own origin and Next.js forwards it to FastAPI (see [next.config.ts](next.config.ts)), so there is no CORS setup and the backend origin never reaches the client bundle. Copy [.env.example](.env.example) to `.env.local` to point it somewhere else.
+Open [http://localhost:3000](http://localhost:3000). The browser calls `/api/*` on its own origin and Next.js forwards it to FastAPI (see [next.config.ts](next.config.ts)), so there is no CORS setup and the backend origin never reaches the client bundle. `BACKEND_ORIGIN` in [.env.example](.env.example) is that server-side rewrite target. It is not a second place for the browser to send the session cookie.
 
 If the API cannot be reached, the schedule says so and offers a retry. It never falls back to fixture lessons — a plausible-looking wrong schedule is worse than a missing one.
 
@@ -80,7 +106,7 @@ The backend suite runs against a real PostgreSQL: it builds the schema with `ale
 - **Schedule** (`/manager`) — the manager's dense ledger. A continuous-time week ruler where a lesson's height is literally its duration (35, 45, 60, 70, 90 minutes — this domain has no uniform grid). Click a lesson to edit it, cancel it, mark no-show, move it, or delete it; drag a lesson to reschedule it, drag empty space (5-minute snap) or use "New lesson" to create. Double-bookings and tight campus-to-campus travel gaps surface themselves. The pay strip at the bottom shows every teacher's week pay and flashes the delta on every edit. "Import a schedule" shows a school's raw spreadsheet flowing column-by-column into the canonical model, then actually inserts the lessons. Optional guided tour: `/manager?tour=1`.
 - **Teacher view** (`/teacher`) — the phone screen, read-only by design. One merged stream across every school, a next-lesson hero, and week/month earnings split into earned-to-now vs scheduled (USD and VND). Cancelled lessons stay visible and are explicitly not paid; finished scheduled lessons settle as earned.
 
-Manager mutations write immediately to PostgreSQL. The teacher view reads the same persisted schedule on load or refresh. There is no save-and-send.
+Manager mutations write immediately to PostgreSQL. A signed-in teacher reads only their own persisted lessons. There is no save-and-send. Logging out clears the session; `/manager` and `/teacher` return to the login screen, and the previous person's lessons are dropped from the browser cache before the next account renders.
 
 **Cancel vs delete.** A lesson that was scheduled and then did not happen is `cancelled` or `no-show` — it stays on the schedule, visibly unpaid, because that is a fact about the week worth keeping. Deleting is for a lesson that should never have existed, and it is gone for good, so it asks first.
 
@@ -89,7 +115,7 @@ Manager mutations write immediately to PostgreSQL. The teacher view reads the sa
 - **The lesson is the atom.** Everything else — earnings, conflicts, the teacher's day — is derived from it.
 - **Pay is never stored.** Delivered hours × the teacher's USD rate; scheduled lessons are assumed delivered, and only exceptions (cancelled / no-show) are marked. Didn't happen, not paid.
 - **VND is always derived** from USD via one captured bank spot rate, converted in exactly one place ([src/domain/money.ts](src/domain/money.ts)) and rounded to the nearest 1,000 ₫ everywhere.
-- **The manager is the only writer.** The teacher reads and never inputs anything — no check-in, no confirmation, no timesheet.
+- **The manager is the only writer.** The teacher reads and never inputs anything — no check-in, no confirmation, no timesheet. The API rejects a teacher's writes with 403. Hiding a button is not the check.
 
 ## Architecture
 

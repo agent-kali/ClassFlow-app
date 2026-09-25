@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { ApiError } from "./httpSource";
 import { createClassFlowStore } from "./store";
 import type { DataSource } from "./source";
 import type { FxRate, Lesson, LessonInput, LessonStatus } from "@/domain/types";
@@ -106,6 +107,86 @@ describe("initial load", () => {
     const { store } = await readyStore({ listLessons: vi.fn(async () => []) });
     expect(store.getState().status).toBe("ready");
     expect(store.getState().lessons).toEqual([]);
+  });
+
+  it("records the user the cache was loaded for and reset drops it", async () => {
+    const store = createClassFlowStore(
+      fakeSource({ listLessons: vi.fn(async () => [STORED]) })
+    );
+    await store.getState().load("usr-manager");
+    expect(store.getState().loadedForUserId).toBe("usr-manager");
+    expect(store.getState().lessons).toEqual([STORED]);
+    store.getState().reset();
+    expect(store.getState().status).toBe("idle");
+    expect(store.getState().lessons).toEqual([]);
+    expect(store.getState().loadedForUserId).toBeNull();
+  });
+
+  it("a 401 clears lessons that were already cached", async () => {
+    let calls = 0;
+    const store = createClassFlowStore(
+      fakeSource({
+        listLessons: vi.fn(async () => {
+          calls += 1;
+          if (calls > 1) {
+            throw new ApiError(401, "unauthorized", "Authentication required.");
+          }
+          return [STORED];
+        }),
+      })
+    );
+    await store.getState().load("usr-a");
+    expect(store.getState().lessons).toEqual([STORED]);
+    await store.getState().load("usr-b");
+    expect(store.getState().status).toBe("error");
+    expect(store.getState().loadErrorStatus).toBe(401);
+    expect(store.getState().lessons).toEqual([]);
+    expect(store.getState().loadedForUserId).toBeNull();
+  });
+
+  it("a 401 from a mutation clears the schedule and signals session loss", async () => {
+    const store = createClassFlowStore(
+      fakeSource({
+        listLessons: vi.fn(async () => [STORED]),
+        createLesson: vi.fn(async () => {
+          throw new ApiError(401, "unauthorized", "Authentication required.");
+        }),
+      })
+    );
+    await store.getState().load("usr-manager");
+    expect(store.getState().schools.length).toBeGreaterThan(0);
+    await expect(store.getState().createLesson(LESSON_INPUT)).rejects.toThrow(
+      "Authentication required."
+    );
+    const state = store.getState();
+    expect(state.lessons).toEqual([]);
+    expect(state.schools).toEqual([]);
+    expect(state.teachers).toEqual([]);
+    expect(state.classGroups).toEqual([]);
+    expect(state.loadedForUserId).toBeNull();
+    expect(state.loadErrorStatus).toBe(401);
+  });
+
+  it("a 403 from a mutation leaves the authenticated schedule in place", async () => {
+    const store = createClassFlowStore(
+      fakeSource({
+        listLessons: vi.fn(async () => [STORED]),
+        updateLesson: vi.fn(async () => {
+          throw new ApiError(403, "forbidden", "You do not have permission to do that.");
+        }),
+      })
+    );
+    await store.getState().load("usr-manager");
+    await expect(
+      store.getState().updateLesson(STORED.id, { curriculum: "nope" })
+    ).rejects.toThrow("You do not have permission to do that.");
+    const state = store.getState();
+    expect(state.status).toBe("ready");
+    expect(state.lessons).toEqual([STORED]);
+    expect(state.schools.length).toBeGreaterThan(0);
+    expect(state.loadedForUserId).toBe("usr-manager");
+    expect(state.loadErrorStatus).toBeNull();
+    expect(state.mutationError).toBe("You do not have permission to do that.");
   });
 
   it("reports an error and no lessons when the backend is unreachable", async () => {

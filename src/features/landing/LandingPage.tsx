@@ -4,7 +4,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { getLandingCopy } from "./copy";
 import { LandingNav } from "./LandingNav";
-import { demoHref, useLocale } from "./locale";
+import { demoHref, teacherDemoHref, useLocale } from "./locale";
 import { HeroTimeline } from "./vignettes/HeroTimeline";
 import { NormalizationVignette } from "./vignettes/NormalizationVignette";
 import { SyncVignette } from "./vignettes/SyncVignette";
@@ -47,7 +47,7 @@ export function LandingPage() {
                 {copy.hero.primaryCta}
               </Link>
               <Link
-                href="/teacher"
+                href={teacherDemoHref(locale)}
                 className="rounded border border-line bg-surface px-4 py-2.5 text-[13px] font-semibold text-ink transition-colors hover:border-ink-faint focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
               >
                 {copy.hero.secondaryCta}
@@ -120,7 +120,7 @@ export function LandingPage() {
             </h2>
             <p className="mt-3 text-[15px] leading-relaxed text-ink-mute">{copy.teacher.body}</p>
             <Link
-              href="/teacher"
+              href={teacherDemoHref(locale)}
               className="mt-5 inline-flex rounded border border-line bg-surface px-4 py-2.5 text-[13px] font-semibold transition-colors hover:border-ink-faint focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
             >
               {copy.hero.secondaryCta}
@@ -179,7 +179,7 @@ export function LandingPage() {
               {copy.footer.managerLink}
             </Link>
             <Link
-              href="/teacher"
+              href={teacherDemoHref(locale)}
               className="rounded border border-line px-4 py-2.5 text-[13px] font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
             >
               {copy.footer.teacherLink}

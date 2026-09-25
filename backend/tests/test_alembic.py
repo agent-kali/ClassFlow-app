@@ -81,6 +81,30 @@ def test_alembic_upgrade_sql_creates_lessons() -> None:
     assert "ck_lessons_moved_from_start_min" in sql
 
 
+def test_alembic_upgrade_sql_creates_users_and_sessions() -> None:
+    result = _alembic("upgrade", "head", "--sql")
+    assert result.returncode == 0, result.stderr
+    sql = result.stdout.lower()
+    assert "create table users" in sql
+    assert "create table sessions" in sql
+    assert "ck_users_email_lowercase" in sql
+    assert "ck_users_role" in sql
+    assert "ck_users_role_teacher" in sql
+    assert "uq_users_email" in sql
+    assert "uq_users_teacher_id" in sql
+    assert "fk_users_teacher_id" in sql
+    assert "uq_sessions_token_hash" in sql
+    assert "fk_sessions_user_id" in sql
+
+
+def test_alembic_downgrade_sql_drops_users_and_sessions() -> None:
+    result = _alembic("downgrade", "head:base", "--sql")
+    assert result.returncode == 0, result.stderr
+    sql = result.stdout.lower()
+    assert "drop table sessions" in sql
+    assert "drop table users" in sql
+
+
 def test_alembic_downgrade_sql_drops_lessons() -> None:
     result = _alembic("downgrade", "head:base", "--sql")
     assert result.returncode == 0, result.stderr

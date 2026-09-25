@@ -107,12 +107,17 @@ def _row_values_from_create(payload: LessonCreate) -> dict[str, object]:
     }
 
 
-def list_lessons(session: Session) -> list[Lesson]:
-    rows = session.scalars(
-        select(LessonModel).order_by(
-            LessonModel.date, LessonModel.start_min, LessonModel.id
-        )
-    ).all()
+def list_lessons(session: Session, *, teacher_id: str | None = None) -> list[Lesson]:
+    """
+    `teacher_id` is taken from the session, never from the query string.
+    None returns the agency schedule; a teacher id returns only that teacher's rows.
+    """
+    statement = select(LessonModel).order_by(
+        LessonModel.date, LessonModel.start_min, LessonModel.id
+    )
+    if teacher_id is not None:
+        statement = statement.where(LessonModel.teacher_id == teacher_id)
+    rows = session.scalars(statement).all()
     return [to_schema(row) for row in rows]
 
 

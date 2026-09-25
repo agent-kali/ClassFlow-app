@@ -9,11 +9,11 @@ import { toIsoDate } from "@/domain/time";
  * A fake backend, entirely in memory, implementing the same DataSource the
  * HTTP client implements. It exists for the fixture demo only: set
  * `NEXT_PUBLIC_DATA_SOURCE=mock` to get a browsable schedule with no server
- * and no database. Everything it holds is lost on reload.
+ * and no database. A guest demo visit can also bind this source explicitly.
+ * Everything it holds is lost on reload.
  *
- * The real product path is `httpSource.ts`. Nothing here is reachable unless
- * that environment variable is set, so a running app never silently falls
- * back to generated lessons.
+ * The real product path is `httpSource.ts`. A failed API call never selects
+ * this source on its own.
  */
 export function createMockSource(seedDate = new Date()): DataSource {
   const today = toIsoDate(seedDate);

@@ -611,6 +611,7 @@ def test_get_db_commits_before_the_http_response_starts(
 
     with patch.object(Session, "commit", tracked_commit):
         with TestClient(observing_app) as client:
+            client.cookies.update(committing_client.cookies)
             response = client.post("/lessons", json=NEW_LESSON)
 
     assert response.status_code == 201, response.text

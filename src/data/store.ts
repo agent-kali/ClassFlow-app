@@ -17,6 +17,7 @@ import { toIsoDate } from "@/domain/time";
 import type { DataSource } from "./source";
 import { loadSchedule } from "./source";
 import { getDataSource } from "./client";
+import { ApiError } from "./httpSource";
 
 /**
  * The client-side cache of server state. PostgreSQL owns the schedule; this
@@ -53,10 +54,18 @@ interface ClassFlowState {
   status: LoadStatus;
   /** Why the initial load failed, if it did. */
   loadError: string | null;
+  /** HTTP status of the last failed load, when the failure was an API response. */
+  loadErrorStatus: number | null;
+  /** User id the ready cache belongs to. Null in mock mode and before the first load. */
+  loadedForUserId: string | null;
   /** Why the last mutation failed. Cleared when another one succeeds. */
   mutationError: string | null;
 
-  load(): Promise<void>;
+  load(userId?: string | null): Promise<void>;
+  /** Point later reads and writes at a different source. Does not touch the cache. */
+  setSource(source: DataSource): void;
+  /** Drop every cached row so the next identity cannot see the previous one. */
+  reset(): void;
   clearMutationError(): void;
 
   createLesson(input: LessonInput): Promise<Lesson>;
@@ -91,9 +100,24 @@ function describeError(error: unknown): string {
   return error instanceof Error ? error.message : "Something went wrong.";
 }
 
+function errorStatus(error: unknown): number | null {
+  return error instanceof ApiError ? error.status : null;
+}
+
 const EMPTY_FX: FxRate = { vndPerUsd: 0, capturedOn: "", source: "" };
 
+const EMPTY_COLLECTIONS = {
+  schools: [] as School[],
+  campuses: [] as Campus[],
+  rooms: [] as Room[],
+  teachers: [] as Teacher[],
+  classGroups: [] as ClassGroup[],
+  lessons: [] as Lesson[],
+  fxRate: EMPTY_FX,
+};
+
 export function createClassFlowStore(source: DataSource) {
+  let active = source;
   return create<ClassFlowState>((set, get) => {
     /** Replaces a lesson in the cache and emits the pay delta it caused. */
     const applyUpdated = (updated: Lesson) => {
@@ -118,12 +142,27 @@ export function createClassFlowStore(source: DataSource) {
       return updated;
     };
 
-    /** Runs a mutation, recording the reason if the backend refuses it. */
+    /**
+     * Runs a mutation. A 401 uses the same session-lost signal as a failed
+     * load, so AuthGate can expire the session and leave the schedule.
+     * A 403, 404, 422, or network failure only records the message.
+     */
     const attempt = async <T>(run: () => Promise<T>): Promise<T> => {
       try {
         return await run();
       } catch (error) {
-        set({ mutationError: describeError(error) });
+        if (errorStatus(error) === 401) {
+          set({
+            ...EMPTY_COLLECTIONS,
+            status: "error",
+            loadError: describeError(error),
+            loadErrorStatus: 401,
+            loadedForUserId: null,
+            mutationError: describeError(error),
+          });
+        } else {
+          set({ mutationError: describeError(error) });
+        }
         throw error;
       }
     };
@@ -140,24 +179,51 @@ export function createClassFlowStore(source: DataSource) {
       lastPayEffect: null,
       status: "idle",
       loadError: null,
+      loadErrorStatus: null,
+      loadedForUserId: null,
       mutationError: null,
 
-      async load() {
+      async load(userId: string | null = null) {
         if (get().status === "loading") return;
-        set({ status: "loading", loadError: null });
+        set({ status: "loading", loadError: null, loadErrorStatus: null });
         try {
-          const snapshot = await loadSchedule(source);
+          const snapshot = await loadSchedule(active);
           set({
             ...snapshot,
             today: toIsoDate(new Date()),
             status: "ready",
             loadError: null,
+            loadErrorStatus: null,
+            loadedForUserId: userId,
           });
         } catch (error) {
           // No fallback to fixtures: an unreachable backend is an error the
-          // manager must see, not a different schedule.
-          set({ status: "error", loadError: describeError(error) });
+          // manager must see, not a different schedule. A 401 also drops any
+          // rows already cached for the previous identity.
+          const statusCode = errorStatus(error);
+          set({
+            status: "error",
+            loadError: describeError(error),
+            loadErrorStatus: statusCode,
+            ...(statusCode === 401 ? { ...EMPTY_COLLECTIONS, loadedForUserId: null } : {}),
+          });
         }
+      },
+
+      setSource(next) {
+        active = next;
+      },
+
+      reset() {
+        set({
+          ...EMPTY_COLLECTIONS,
+          lastPayEffect: null,
+          status: "idle",
+          loadError: null,
+          loadErrorStatus: null,
+          mutationError: null,
+          loadedForUserId: null,
+        });
       },
 
       clearMutationError() {
@@ -165,7 +231,7 @@ export function createClassFlowStore(source: DataSource) {
       },
 
       async createLesson(input) {
-        const created = await attempt(() => source.createLesson(input));
+        const created = await attempt(() => active.createLesson(input));
         const deltaUsd = payableUsd(created, get().teachers);
         set((s) => ({
           lessons: [...s.lessons, created],
@@ -178,7 +244,7 @@ export function createClassFlowStore(source: DataSource) {
       },
 
       async updateLesson(id, patch) {
-        return applyUpdated(await attempt(() => source.updateLesson(id, patch)));
+        return applyUpdated(await attempt(() => active.updateLesson(id, patch)));
       },
 
       async editLesson(id, patch) {
@@ -196,19 +262,19 @@ export function createClassFlowStore(source: DataSource) {
       },
 
       async setLessonStatus(id, status) {
-        return applyUpdated(await attempt(() => source.setLessonStatus(id, status)));
+        return applyUpdated(await attempt(() => active.setLessonStatus(id, status)));
       },
 
       async rescheduleLesson(id, date, startMin, endMin) {
         // movedFrom is derived by the backend, which is why the response and
         // not the request is what updates the cache.
         return applyUpdated(
-          await attempt(() => source.rescheduleLesson(id, date, startMin, endMin))
+          await attempt(() => active.rescheduleLesson(id, date, startMin, endMin))
         );
       },
 
       async deleteLesson(id) {
-        await attempt(() => source.deleteLesson(id));
+        await attempt(() => active.deleteLesson(id));
         set((s) => {
           const removed = s.lessons.find((l) => l.id === id);
           const deltaUsd = removed ? -payableUsd(removed, s.teachers) : 0;
@@ -229,7 +295,7 @@ export function createClassFlowStore(source: DataSource) {
       },
 
       async importLessons(inputs) {
-        const created = await attempt(() => source.importLessons(inputs));
+        const created = await attempt(() => active.importLessons(inputs));
         set((s) => ({
           lessons: [...s.lessons, ...created],
           mutationError: null,

@@ -1,15 +1,26 @@
 import datetime
 from decimal import Decimal
 
-from sqlalchemy import Boolean, CheckConstraint, Date, ForeignKey, Integer, Numeric, String, UniqueConstraint
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    Date,
+    DateTime,
+    ForeignKey,
+    Integer,
+    Numeric,
+    String,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
-from app.schemas import LessonStatus, SchoolColor, TeacherCategory
+from app.schemas import LessonStatus, SchoolColor, TeacherCategory, UserRole
 
 _CATEGORY_SQL = ", ".join(f"'{category.value}'" for category in TeacherCategory)
 _COLOR_SQL = ", ".join(f"'{color.value}'" for color in SchoolColor)
 _STATUS_SQL = ", ".join(f"'{status.value}'" for status in LessonStatus)
+_ROLE_SQL = ", ".join(f"'{role.value}'" for role in UserRole)
 
 
 class TeacherModel(Base):
@@ -155,3 +166,62 @@ class LessonModel(Base):
     class_group: Mapped["ClassGroupModel"] = relationship()
     room: Mapped["RoomModel"] = relationship()
     teacher: Mapped["TeacherModel"] = relationship()
+
+
+class UserModel(Base):
+    """
+    An application login. Teacher profile data stays on `teachers`; this row
+    only records who can sign in and which teacher they are, if either.
+    """
+
+    __tablename__ = "users"
+    __table_args__ = (
+        UniqueConstraint("email", name="uq_users_email"),
+        UniqueConstraint("teacher_id", name="uq_users_teacher_id"),
+        CheckConstraint("email = lower(email)", name="ck_users_email_lowercase"),
+        CheckConstraint(f"role IN ({_ROLE_SQL})", name="ck_users_role"),
+        CheckConstraint(
+            "(role = 'teacher' AND teacher_id IS NOT NULL) "
+            "OR (role = 'manager' AND teacher_id IS NULL)",
+            name="ck_users_role_teacher",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    email: Mapped[str] = mapped_column(String, nullable=False)
+    password_hash: Mapped[str] = mapped_column(String, nullable=False)
+    role: Mapped[str] = mapped_column(String, nullable=False)
+    teacher_id: Mapped[str | None] = mapped_column(
+        ForeignKey(
+            "teachers.id",
+            name="fk_users_teacher_id",
+            ondelete="RESTRICT",
+        ),
+        nullable=True,
+    )
+    active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+
+    teacher: Mapped["TeacherModel | None"] = relationship()
+    sessions: Mapped[list["SessionModel"]] = relationship(back_populates="user")
+
+
+class SessionModel(Base):
+    """Opaque login session. The cookie holds the raw token; the row holds its HMAC."""
+
+    __tablename__ = "sessions"
+    __table_args__ = (UniqueConstraint("token_hash", name="uq_sessions_token_hash"),)
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    token_hash: Mapped[str] = mapped_column(String, nullable=False)
+    user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", name="fk_sessions_user_id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    expires_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+
+    user: Mapped["UserModel"] = relationship(back_populates="sessions")

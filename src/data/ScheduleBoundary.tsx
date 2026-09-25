@@ -1,7 +1,12 @@
 "use client";
 
 import { useEffect } from "react";
+import { usePathname, useSearchParams } from "next/navigation";
+import { GUEST_DEMO_OWNER, isGuestDemoEntry, type AppPath } from "./access";
+import { isMockMode } from "./client";
+import { useAuthStore } from "./authStore";
 import { useScheduleStatus } from "./hooks";
+import { useClassFlowStore } from "./store";
 
 /**
  * Loads the schedule from the backend once, and holds the screen until it is
@@ -11,10 +16,36 @@ import { useScheduleStatus } from "./hooks";
  */
 export function ScheduleBoundary({ children }: { children: React.ReactNode }) {
   const { status, error, load } = useScheduleStatus();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const authStatus = useAuthStore((s) => s.status);
+  const userId = useAuthStore((s) => s.user?.id ?? null);
+  const loadErrorStatus = useClassFlowStore((s) => s.loadErrorStatus);
+  const path: AppPath = pathname.startsWith("/teacher")
+    ? "/teacher"
+    : pathname.startsWith("/login")
+      ? "/login"
+      : "/manager";
+  const guestDemo =
+    !isMockMode() &&
+    authStatus === "anonymous" &&
+    isGuestDemoEntry(path, {
+      tour: searchParams.get("tour"),
+      demo: searchParams.get("demo"),
+    });
+  const ownerId = guestDemo ? GUEST_DEMO_OWNER : userId;
 
   useEffect(() => {
-    if (status === "idle") void load();
-  }, [status, load]);
+    if (status === "idle") void load(ownerId);
+  }, [status, load, ownerId]);
+
+  if (loadErrorStatus === 401) {
+    return (
+      <div className="flex h-dvh items-center justify-center" role="status">
+        <p className="text-[13px] text-ink-mute">Checking session…</p>
+      </div>
+    );
+  }
 
   if (status === "ready") return <>{children}</>;
 
