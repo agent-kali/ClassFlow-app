@@ -8,9 +8,10 @@ import { lessonHours } from "@/domain/types";
 import { useConflicts, useLessonMutations, useLessons, useLookups } from "@/data/hooks";
 import { isTeacherOverlap, overlapMinutes } from "@/domain/conflicts";
 import { formatMin, formatRange, parseTime, weekDates } from "@/domain/time";
-import { Badge } from "@/components/Badge";
 import { MoneyPair } from "@/components/MoneyPair";
 import { SchoolChip } from "@/components/SchoolChip";
+import { useLocale } from "@/features/landing/locale";
+import { getManagerCopy } from "./copy";
 import { LessonEditForm } from "./LessonEditForm";
 
 interface Props {
@@ -40,6 +41,8 @@ export function LessonPopover({
   onViewConflictingLesson,
   stackAboveTour = false,
 }: Props) {
+  const [locale] = useLocale();
+  const copy = getManagerCopy(locale);
   const lookups = useLookups();
   const lessons = useLessons();
   const { byLesson } = useConflicts();
@@ -145,16 +148,20 @@ export function LessonPopover({
           style={{ boxShadow: "var(--shadow-pop)" }}
           onCloseAutoFocus={(e) => e.preventDefault()}
         >
-          <div className="mb-1 flex items-center gap-2">
-            <span className="cf-mono text-[15px] font-bold">{group?.code}</span>
+          <div className="mb-1 flex flex-wrap items-center gap-2">
+            <span className="cf-mono text-[16px] font-bold">{group?.code}</span>
             <SchoolChip school={school} />
             {isOff && (
-              <Badge size="sm" tone="cancelled">
-                {lesson.status}
-              </Badge>
+              <span
+                className={`text-[13px] font-semibold ${
+                  lesson.status === "no-show" ? "text-warn" : "text-danger"
+                }`}
+              >
+                {lesson.status === "no-show" ? copy.noShowCard : copy.cancelledCard}
+              </span>
             )}
           </div>
-          <p className="text-[12px] text-ink-mute">
+          <p className="text-[14px] leading-snug text-ink-mute">
             {group?.program} · {group?.level}
           </p>
 
@@ -168,9 +175,9 @@ export function LessonPopover({
             />
           ) : (
             <>
-              <dl className="mt-2 space-y-1 text-[12px]">
+              <dl className="mt-2 space-y-1.5 text-[14px] leading-snug">
                 <div className="flex gap-2">
-                  <dt className="w-14 shrink-0 text-ink-faint">When</dt>
+                  <dt className="w-16 shrink-0 text-ink-mute">When</dt>
                   <dd className="cf-mono">
                     {format(parseISO(lesson.date), "EEE dd/MM")} · {formatRange(lesson.startMin, lesson.endMin)}
                     {lesson.weekCode && <span className="ml-1.5 text-ink-mute">{lesson.weekCode}</span>}
@@ -178,21 +185,21 @@ export function LessonPopover({
                 </div>
                 {lesson.movedFrom && (
                   <div className="flex gap-2">
-                    <dt className="w-14 shrink-0 text-ink-faint">Moved</dt>
+                    <dt className="w-16 shrink-0 text-ink-mute">Moved</dt>
                     <dd className="cf-mono text-ink-mute">
                       from {format(parseISO(lesson.movedFrom.date), "EEE dd/MM")} {formatMin(lesson.movedFrom.startMin)}
                     </dd>
                   </div>
                 )}
                 <div className="flex gap-2">
-                  <dt className="w-14 shrink-0 text-ink-faint">Where</dt>
+                    <dt className="w-16 shrink-0 text-ink-mute">Where</dt>
                   <dd>
                     <span className="cf-mono">{room?.name}</span>
                     <span className="text-ink-mute"> · {campus?.name}</span>
                   </dd>
                 </div>
                 <div className="flex gap-2">
-                  <dt className="w-14 shrink-0 text-ink-faint">Who</dt>
+                    <dt className="w-16 shrink-0 text-ink-mute">Who</dt>
                   <dd>
                     <span className="cf-mono font-medium">{teacher?.code}</span>
                     <span className="text-ink-mute"> {teacher?.name}</span>
@@ -200,7 +207,7 @@ export function LessonPopover({
                   </dd>
                 </div>
                 <div className="flex gap-2">
-                  <dt className="w-14 shrink-0 text-ink-faint">Teaching</dt>
+                    <dt className="w-16 shrink-0 text-ink-mute">Teaching</dt>
                   <dd className="text-ink">{lesson.curriculum}</dd>
                 </div>
               </dl>
@@ -217,20 +224,20 @@ export function LessonPopover({
                     key={overlap.other.id}
                     className="mt-2.5 rounded border border-danger/25 bg-danger-soft px-2.5 py-2"
                   >
-                    <div className="flex items-center gap-1.5 text-[12px] font-semibold text-danger">
+                    <div className="flex items-center gap-1.5 text-[14px] font-semibold text-danger">
                       <span aria-hidden>⚠</span>
-                      Double booking
+                      {copy.doubleBookingCard}
                     </div>
-                    <p className="mt-1 text-[12px] text-ink">
+                    <p className="mt-1 text-[14px] text-ink">
                       <span className="cf-mono font-medium">{teacher?.code ?? "?"}</span>
                       {" is also teaching "}
                       <span className="cf-mono font-medium">{otherGroup?.code ?? "another class"}</span>
                     </p>
-                    <p className="cf-mono text-[12px]">{otherRange}</p>
+                    <p className="cf-mono text-[14px]">{otherRange}</p>
                     {location && (
-                      <p className="text-[12px] text-ink-mute">{location}</p>
+                      <p className="text-[14px] text-ink-mute">{location}</p>
                     )}
-                    <p className="mt-1 text-[12px] text-ink">
+                    <p className="mt-1 text-[14px] text-ink">
                       Overlap:{" "}
                       {overlapRange !== otherRange ? `${overlapRange} · ` : ""}
                       {overlap.overlapMin} min
@@ -238,7 +245,7 @@ export function LessonPopover({
                     {onViewConflictingLesson && (
                       <button
                         type="button"
-                        className="mt-1.5 text-[12px] font-medium text-accent hover:underline"
+                        className="mt-1.5 text-[14px] font-medium text-accent hover:underline"
                         onClick={(e) => {
                           e.preventDefault();
                           e.stopPropagation();
@@ -253,7 +260,7 @@ export function LessonPopover({
               })}
 
               <div className="mt-2.5 flex items-center justify-between rounded bg-surface px-2 py-1.5">
-                <span className="text-[11px] text-ink-mute">
+                <span className="text-[13px] text-ink-mute">
                   {isOff ? "Not paid — didn't happen" : `${lessonHours(lesson)}h × ${teacher?.code}'s rate`}
                 </span>
                 <MoneyPair usd={usd} size="sm" align="right" struck={isOff} />

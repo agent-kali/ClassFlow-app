@@ -58,6 +58,7 @@
   --lc-surface: #fdfbf6;
   --lc-border: #e7e0d1;
   --lc-text: #2a2418;
+  --lc-text-secondary: #4a453c;
   --lc-text-muted: #6f6a5e;
   --lc-text-faint: #8a8375;
   --lc-conflict: #c0442f;
@@ -106,6 +107,20 @@
 
   --card-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
   --card-shadow-hover: 0 3px 10px rgba(0, 0, 0, 0.55);
+
+  --lc-surface: #24282c;
+  --lc-border: #3c434a;
+  --lc-text: #f3efe6;
+  --lc-text-secondary: #d9d3c7;
+  --lc-text-muted: #c8c2b6;
+  --lc-text-faint: #9b968a;
+  --lc-conflict: #e07a68;
+  --lc-now-line: #c8c2b6;
+  --lc-focus: #7ec8ff;
+  --lc-elev-default: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --lc-elev-hover: 0 10px 20px -8px rgba(0, 0, 0, 0.55);
+  --lc-elev-selected: 0 14px 28px -10px rgba(0, 0, 0, 0.6);
+  --lc-elev-conflict: 0 3px 11px -3px rgba(224, 122, 104, 0.35);
 }
 
 @theme inline {
@@ -414,17 +429,15 @@ select,
   color: var(--accent-ink);
 }
 
-/* Agenda lesson cards */
+/* Agenda lesson cards. Height follows the text so a status line is never clipped. */
 .lesson-card {
   position: relative;
   flex-shrink: 0;
-  height: var(--agenda-card-h, 72px);
-  min-height: var(--agenda-card-h, 72px);
-  max-height: var(--agenda-card-h, 72px);
+  min-height: 76px;
+  height: auto;
   cursor: pointer;
   border-radius: 13px;
   outline: none;
-  overflow: hidden;
   transition:
     transform 0.2s ease,
     box-shadow 0.2s ease,
@@ -436,10 +449,7 @@ select,
   box-shadow: var(--lc-elev-hover);
 }
 .lesson-card--travel-focus {
-  box-shadow: 0 0 0 2px var(--warn-soft);
-}
-.lesson-card[data-past="true"] .lesson-card__surface {
-  opacity: 0.72;
+  box-shadow: 0 0 0 2px var(--warn);
 }
 .lesson-card[data-selected="true"] {
   box-shadow: var(--lc-elev-selected);
@@ -453,126 +463,136 @@ select,
 }
 
 .lesson-card__surface {
-  position: absolute;
-  inset: 0;
+  position: relative;
+  min-height: 76px;
   border-radius: inherit;
   overflow: hidden;
   background: var(--lc-surface);
   border: 1px solid var(--lc-border);
-  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+  border-left: 3px solid var(--lc-accent);
+  transition: box-shadow 0.2s ease, border-color 0.2s ease, background-color 0.2s ease;
 }
-.lesson-card[data-selected="true"] .lesson-card__surface {
+.lesson-card[data-past="true"] .lesson-card__surface {
+  background: color-mix(in srgb, var(--lc-surface) 78%, var(--ground));
+}
+.lesson-card[data-conflict="true"] .lesson-card__surface {
+  background: color-mix(in srgb, var(--danger-soft) 62%, var(--lc-surface));
+  border-color: color-mix(in srgb, var(--danger) 50%, var(--lc-border));
+  border-left-color: var(--danger);
+}
+.lesson-card[data-travel="true"]:not([data-conflict="true"]) .lesson-card__surface {
+  background: color-mix(in srgb, var(--warn-soft) 70%, var(--lc-surface));
+  border-color: color-mix(in srgb, var(--warn) 48%, var(--lc-border));
+  border-left-color: var(--warn);
+}
+.lesson-card[data-status="cancelled"] .lesson-card__surface {
+  background: color-mix(in srgb, var(--danger-soft) 50%, var(--lc-surface));
+  border-color: color-mix(in srgb, var(--danger) 42%, var(--lc-border));
+  border-left-color: var(--danger);
+}
+.lesson-card[data-status="no-show"] .lesson-card__surface {
+  background: color-mix(in srgb, var(--warn-soft) 40%, var(--lc-surface));
+  border-style: dashed;
+  border-left-style: solid;
+  border-color: color-mix(in srgb, var(--warn) 62%, var(--lc-border));
+  border-left-color: var(--warn);
+}
+.lesson-card[data-selected="true"]:not([data-conflict="true"]):not([data-travel="true"]):not([data-status]) .lesson-card__surface {
   border-color: color-mix(in oklab, var(--lc-accent) 45%, var(--lc-border));
+  border-left-color: var(--lc-accent);
 }
-.lesson-card:hover .lesson-card__surface {
-  border-color: color-mix(in oklab, var(--ink-faint) 60%, var(--lc-border));
+.lesson-card:hover:not([data-conflict="true"]):not([data-travel="true"]):not([data-status]) .lesson-card__surface {
+  border-color: color-mix(in oklab, var(--ink) 28%, var(--lc-border));
 }
 .lesson-card--conflict-focus .lesson-card__surface,
 .lesson-card--conflict-focus[data-selected="true"] .lesson-card__surface,
 .lesson-card--conflict-focus:hover .lesson-card__surface {
-  border-color: color-mix(in srgb, var(--lc-conflict) 50%, var(--lc-border));
-  background: color-mix(in srgb, var(--danger-soft) 55%, var(--lc-surface));
-}
-
-.lesson-card__accent {
-  position: absolute;
-  left: 0;
-  top: 8px;
-  bottom: 8px;
-  width: 2px;
-  border-radius: 1px;
-}
-.lesson-card__accent--conflict {
-  background: var(--danger);
-}
-.lesson-card__accent--travel {
-  background: var(--warn);
+  border-color: var(--danger);
+  border-left-color: var(--danger);
+  background: color-mix(in srgb, var(--danger-soft) 72%, var(--lc-surface));
 }
 
 .lesson-card__body {
-  position: absolute;
-  inset: 0;
-  padding: 12px;
+  position: relative;
+  padding: 8px 8px 8px 7px;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 2px;
+  gap: 1px;
   min-width: 0;
-  overflow: hidden;
-}
-.lesson-card__accent ~ .lesson-card__body {
-  padding-left: 14px;
 }
 .lesson-card__time {
-  font-size: 13px;
-  line-height: 1.2;
+  font-size: 14px;
+  line-height: 1.25;
   white-space: nowrap;
   flex-shrink: 0;
-  overflow: visible;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--lc-text);
 }
-.lesson-card__time-start {
-  font-weight: 700;
+.lesson-card__time-start,
+.lesson-card__time-end {
+  font-weight: 600;
   color: var(--lc-text);
 }
 .lesson-card__time-sep {
-  font-weight: 400;
-  color: var(--lc-text-faint);
-}
-.lesson-card__time-end {
+  margin: 0 3px;
   font-weight: 500;
-  color: var(--lc-text-muted);
-}
-.lesson-card__meta {
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-  min-width: 0;
-  flex-shrink: 0;
-}
-.lesson-card__teacher {
-  flex-shrink: 0;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  color: var(--lc-accent);
+  color: var(--lc-text-secondary);
 }
 .lesson-card__class {
-  font-size: 11.5px;
-  font-weight: 600;
-  line-height: 1.2;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.25;
   color: var(--lc-text);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   min-width: 0;
 }
+.lesson-card[data-status="cancelled"] .lesson-card__class {
+  text-decoration: line-through;
+  text-decoration-color: var(--danger);
+  text-decoration-thickness: 1.5px;
+}
+.lesson-card__secondary {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  font-size: 13px;
+  line-height: 1.25;
+  color: var(--lc-text-secondary);
+}
+.lesson-card__teacher,
 .lesson-card__location {
-  font-size: 10.5px;
-  line-height: 1.2;
-  color: var(--lc-text-muted);
-  white-space: nowrap;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
-  flex-shrink: 0;
+  white-space: nowrap;
+}
+.lesson-card__teacher {
+  font-weight: 600;
 }
 .lesson-card__status {
-  font-size: 10px;
-  line-height: 1.2;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.25;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  flex-shrink: 0;
 }
-.lesson-card__status--conflict {
+.lesson-card__status--conflict,
+.lesson-card__status--cancelled {
   color: var(--danger);
 }
-.lesson-card__status--travel {
+.lesson-card__status--travel,
+.lesson-card__status--noshow {
   color: var(--warn);
 }
 
 .week-agenda {
-  --agenda-card-h: 72px;
   --agenda-gap: 9px;
 }
 .week-agenda__board {
@@ -588,8 +608,14 @@ select,
   background: var(--surface);
 }
 .week-agenda__header-cell {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px;
+  min-width: 0;
   border-left: 1px solid var(--line-soft);
-  padding: 6px 8px;
+  padding: 8px;
+  line-height: 1.3;
 }
 .week-agenda__header-cell--today {
   background: var(--accent-soft);
@@ -636,18 +662,18 @@ select,
 .week-agenda__period-label {
   flex-shrink: 0;
   font-family: var(--font-mono, ui-monospace, monospace);
-  font-size: 9px;
+  font-size: 13px;
   font-weight: 600;
-  letter-spacing: 0.06em;
-  color: var(--ink-faint);
+  letter-spacing: 0.04em;
+  color: var(--ink-mute);
 }
 .week-agenda__empty {
   display: flex;
   align-items: center;
   justify-content: center;
   min-height: 80px;
-  font-size: 11px;
-  color: var(--ink-faint);
+  font-size: 13px;
+  color: var(--ink-mute);
   border: 1px dashed var(--line-soft);
   border-radius: 6px;
 }
@@ -682,7 +708,7 @@ select,
   border-radius: 6px;
   border: 1px solid var(--line-soft);
   background: var(--ground);
-  color: var(--ink-mute);
+  color: var(--ink);
   position: relative;
 }
 .week-agenda__day-tab--active {
@@ -694,13 +720,11 @@ select,
   border-color: color-mix(in oklab, var(--accent) 40%, var(--line-soft));
 }
 .week-agenda__day-count {
-  position: absolute;
-  top: 2px;
-  right: 4px;
   font-family: var(--font-mono, ui-monospace, monospace);
-  font-size: 8px;
+  font-size: 12px;
   font-weight: 700;
-  color: var(--ink-faint);
+  line-height: 1.2;
+  color: var(--ink-mute);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -744,25 +768,29 @@ select,
     color 0.15s ease;
 }
 .schedule-toolbar__arrow {
-  padding: 2px 6px;
-  font-size: 12px;
-  color: var(--ink-mute);
+  min-width: 32px;
+  min-height: 32px;
+  padding: 4px 8px;
+  font-size: 14px;
+  color: var(--ink);
 }
 .schedule-toolbar__arrow:hover {
   border-color: var(--ink-faint);
   color: var(--ink);
 }
 .schedule-toolbar__now {
-  padding: 2px 6px;
-  font-size: 11px;
+  min-height: 32px;
+  padding: 4px 8px;
+  font-size: 13px;
   color: var(--accent);
 }
 .schedule-toolbar__now:hover {
   border-color: var(--accent);
 }
 .schedule-toolbar__clear {
-  padding: 2px 6px;
-  font-size: 11px;
+  min-height: 32px;
+  padding: 4px 8px;
+  font-size: 13px;
   color: var(--ink-mute);
 }
 .schedule-toolbar__clear:hover {
@@ -772,10 +800,13 @@ select,
 .schedule-toolbar__title {
   min-width: 0;
   flex: 1 1 auto;
-  font-size: 13px;
+  overflow: hidden;
+  font-size: 16px;
   font-weight: 600;
-  line-height: 1.2;
+  line-height: 1.25;
   white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--ink);
 }
 .schedule-toolbar__title-compact {
   display: inline;
@@ -794,11 +825,12 @@ select,
   max-width: 100%;
 }
 .schedule-toolbar__no-conflicts {
-  font-size: 11px;
-  color: var(--ink-faint);
+  font-size: 13px;
+  color: var(--ink-mute);
 }
 .schedule-toolbar__actions-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
   min-width: 0;
@@ -808,8 +840,8 @@ select,
   flex-shrink: 0;
   border-radius: 4px;
   border: 1px solid var(--line);
-  padding: 4px 10px;
-  font-size: 12px;
+  padding: 6px 12px;
+  font-size: 13px;
   font-weight: 500;
   background: transparent;
   transition:
@@ -829,8 +861,8 @@ select,
 .schedule-toolbar__new {
   flex-shrink: 0;
   border-radius: 4px;
-  padding: 4px 10px;
-  font-size: 12px;
+  padding: 6px 12px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--accent-ink);
   background: var(--accent);
@@ -877,8 +909,8 @@ select,
   background: var(--ground);
 }
 .view-toggle__option {
-  padding: 2px 10px;
-  font-size: 12px;
+  padding: 6px 12px;
+  font-size: 13px;
   font-weight: 500;
   color: var(--ink-mute);
   background: transparent;

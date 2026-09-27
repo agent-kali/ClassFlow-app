@@ -172,6 +172,7 @@ export function WeekTimeline({
   const [dropTarget, setDropTarget] = useState<DropTarget | null>(null);
   const dropTargetRef = useRef<DropTarget | null>(null);
   const scrollerRef = useRef<HTMLDivElement>(null);
+  const mobileNavRef = useRef<HTMLDivElement>(null);
   const dayColRefs = useRef<(HTMLDivElement | null)[]>([]);
   const stackRefs = useRef<Map<string, HTMLDivElement | null>>(new Map());
   const suppressClickRef = useRef(false);
@@ -217,6 +218,15 @@ export function WeekTimeline({
   }, [byDay]);
 
   const nowMin = nowMinOn(today, now);
+
+  useEffect(() => {
+    if (!isNarrow) return;
+    const nav = mobileNavRef.current;
+    const tab = nav?.querySelector<HTMLElement>('[aria-selected="true"]');
+    if (!nav || !tab) return;
+    const left = tab.offsetLeft - (nav.clientWidth - tab.offsetWidth) / 2;
+    nav.scrollLeft = Math.max(0, left);
+  }, [isNarrow, mobileDayIndex, days]);
 
   useEffect(() => {
     if (!focusedTravelKey || travelFocusNonce === 0) return;
@@ -430,7 +440,12 @@ export function WeekTimeline({
     >
       <div className="week-agenda__board">
         {isNarrow ? (
-          <div className="week-agenda__mobile-nav" role="tablist" aria-label={copy.dayOfWeek}>
+          <div
+            ref={mobileNavRef}
+            className="week-agenda__mobile-nav"
+            role="tablist"
+            aria-label={copy.dayOfWeek}
+          >
             {days.map((date, i) => {
               const d = parseISO(date);
               const isToday = date === today;
@@ -445,10 +460,10 @@ export function WeekTimeline({
                   className={`week-agenda__day-tab ${isActive ? "week-agenda__day-tab--active" : ""} ${isToday ? "week-agenda__day-tab--today" : ""}`}
                   onClick={() => setMobileDay({ key: weekTodayKey, index: i })}
                 >
-                  <span className="cf-mono text-[11px] font-semibold uppercase">
+                  <span className="cf-mono text-[13px] font-semibold uppercase">
                     {format(d, "EEE", { locale: dateLocale })}
                   </span>
-                  <span className="cf-mono text-[10px]">{format(d, "dd/MM")}</span>
+                  <span className="cf-mono text-[13px]">{format(d, "dd/MM")}</span>
                   {count > 0 && <span className="week-agenda__day-count">{count}</span>}
                 </button>
               );
@@ -466,17 +481,17 @@ export function WeekTimeline({
                   className={`week-agenda__header-cell ${isToday ? "week-agenda__header-cell--today" : ""}`}
                 >
                   <span
-                    className={`cf-mono text-[11px] font-semibold uppercase ${isToday ? "text-accent" : "text-ink-mute"}`}
+                    className={`cf-mono text-[13px] font-semibold uppercase ${isToday ? "text-accent" : "text-ink"}`}
                   >
                     {format(d, "EEE", { locale: dateLocale })}
                   </span>
                   <span
-                    className={`cf-mono ml-1.5 text-[11px] ${isToday ? "text-accent" : "text-ink-faint"}`}
+                    className={`cf-mono text-[13px] ${isToday ? "text-accent" : "text-ink-mute"}`}
                   >
                     {format(d, "dd/MM")}
                   </span>
                   {count > 0 && (
-                    <span className="cf-mono ml-1 text-[10px] text-ink-faint">{count}</span>
+                    <span className="cf-mono text-[12px] text-ink-mute">{count}</span>
                   )}
                 </div>
               );
