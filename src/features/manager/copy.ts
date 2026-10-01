@@ -38,6 +38,8 @@ export interface ManagerChromeCopy {
   themeLight: string;
   switchToTheme: (target: "dark" | "light") => string;
   noLessons: string;
+  cancelledCard: string;
+  noShowCard: string;
   doubleBookingCard: string;
   tightTravelCard: (gapMin: number) => string;
   tightTravelShort: string;
@@ -91,6 +93,8 @@ const en: ManagerChromeCopy = {
   themeLight: "Light",
   switchToTheme: (target) => `Switch to ${target} theme`,
   noLessons: "No lessons",
+  cancelledCard: "Cancelled",
+  noShowCard: "No-show",
   doubleBookingCard: "Double booking",
   tightTravelCard: (gapMin) => `Tight travel (${gapMin} min)`,
   tightTravelShort: "Tight travel",
@@ -148,6 +152,8 @@ const vi: ManagerChromeCopy = {
   switchToTheme: (target) =>
     target === "dark" ? "Chuyển sang giao diện tối" : "Chuyển sang giao diện sáng",
   noLessons: "Không có buổi",
+  cancelledCard: "Đã hủy",
+  noShowCard: "Vắng mặt",
   doubleBookingCard: "Trùng lịch",
   tightTravelCard: (gapMin) => `Di chuyển sát (${gapMin} phút)`,
   tightTravelShort: "Di chuyển sát",

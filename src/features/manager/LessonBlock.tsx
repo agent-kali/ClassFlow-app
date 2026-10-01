@@ -51,36 +51,55 @@ export function LessonBlock({
   const teacher = lookups.teachersById.get(lesson.teacherId);
 
   const isOff = lesson.status !== "scheduled";
-  const isPast = isLessonPast(lesson, today, nowMin) || isOff;
+  const completed = isLessonPast(lesson, today, nowMin);
   const hasConflict = !isOff && hasOverlapConflict(conflicts);
   const travelConflict = !isOff ? conflicts.find((c) => c.type === "travel") : undefined;
 
-  const teacherCode = (teacher?.code ?? "?").slice(0, 3).toUpperCase();
+  const teacherName = teacher?.name ?? teacher?.code ?? "?";
   const classCode = group?.code ?? "Lesson";
   const location = [campus?.name ?? school?.shortName, room?.name].filter(Boolean).join(" · ");
   const timeLabel = `${formatAgendaMin(lesson.startMin)} — ${formatAgendaMin(lesson.endMin)}`;
+  const program = group ? `${group.program} · ${group.level}` : "";
 
-  const accent = accentForSchool(school?.color, isOff, isPast && !isOff);
+  const accent = accentForSchool(school?.color, isOff, completed);
 
+  const offLabel =
+    lesson.status === "cancelled"
+      ? copy.cancelledCard
+      : lesson.status === "no-show"
+        ? copy.noShowCard
+        : null;
+  const statusKind = offLabel
+    ? lesson.status === "no-show"
+      ? "noshow"
+      : "cancelled"
+    : hasConflict
+      ? "conflict"
+      : travelConflict
+        ? "travel"
+        : null;
+  const statusText =
+    offLabel ??
+    (hasConflict
+      ? copy.doubleBookingCard
+      : travelConflict
+        ? copy.tightTravelCard(travelConflict.gapMin)
+        : null);
+
+  const teacherBit =
+    teacher?.name && teacher.code ? `${teacher.name} (${teacher.code})` : teacherName;
   const label =
-    `${classCode}, ${timeLabel}, ${teacherCode}${location ? `, ${location}` : ""}` +
-    (hasConflict ? ", conflict — double booking" : "") +
-    (travelConflict ? ", tight travel" : "") +
-    (isPast ? ", completed" : "") +
+    [classCode, timeLabel, teacherBit, location, program].filter(Boolean).join(", ") +
+    (statusText ? `, ${statusText}` : "") +
+    (completed ? ", completed" : "") +
     (isSelected ? ", selected" : "");
-
-  const statusKind = hasConflict ? "conflict" : travelConflict ? "travel" : null;
-  const statusText = hasConflict
-    ? copy.doubleBookingCard
-    : travelConflict
-      ? copy.tightTravelCard(travelConflict.gapMin)
-      : null;
 
   return (
     <div
       className={`lesson-card ${travelHighlighted ? "lesson-card--travel-focus" : ""} ${conflictHighlighted ? "lesson-card--conflict-focus" : ""} ${isDragging ? "lesson-card--dragging" : ""}`}
       style={{ "--lc-accent": accent } as CSSProperties}
-      data-past={isPast || undefined}
+      data-past={completed || undefined}
+      data-status={isOff ? lesson.status : undefined}
       data-conflict={hasConflict || undefined}
       data-travel={travelConflict ? true : undefined}
       data-selected={isSelected}
@@ -90,6 +109,7 @@ export function LessonBlock({
       tabIndex={0}
       role="button"
       aria-label={label}
+      title={label}
       onPointerDown={(e) => {
         if (e.button !== 0) return;
         onDragStart?.(lesson, e);
@@ -109,19 +129,18 @@ export function LessonBlock({
         {conflictHighlighted && conflictFocusNonce > 0 && (
           <span key={conflictFocusNonce} className="lesson-card__focus-pulse" aria-hidden />
         )}
-        {statusKind && <div className={`lesson-card__accent lesson-card__accent--${statusKind}`} />}
         <div className="lesson-card__body">
           <div className="lesson-card__time cf-mono">
             <span className="lesson-card__time-start">{formatAgendaMin(lesson.startMin)}</span>
-            <span className="lesson-card__time-sep"> — </span>
+            <span className="lesson-card__time-sep">–</span>
             <span className="lesson-card__time-end">{formatAgendaMin(lesson.endMin)}</span>
           </div>
-          <div className="lesson-card__meta">
-            <span className="lesson-card__teacher cf-mono">{teacherCode}</span>
-            <span className="lesson-card__class">{classCode}</span>
+          <div className="lesson-card__class">{classCode}</div>
+          <div className="lesson-card__secondary">
+            <span className="lesson-card__teacher">{teacherName}</span>
+            {location && <span className="lesson-card__location">{location}</span>}
           </div>
-          {location && <div className="lesson-card__location">{location}</div>}
-          {statusText && (
+          {statusText && statusKind && (
             <div className={`lesson-card__status lesson-card__status--${statusKind}`}>
               {statusText}
             </div>
