@@ -45,11 +45,15 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 
   async logout() {
+    set({ error: null });
     try {
       await logoutRequest();
-    } finally {
-      set({ status: "anonymous", user: null, error: null });
+    } catch (error) {
+      // The cookie is still valid, so the signed-in user and their schedule stay.
+      set({ error: describe(error) });
+      throw error;
     }
+    set({ status: "anonymous", user: null, error: null });
   },
 
   expire() {
