@@ -22,10 +22,10 @@ import { formatUsd } from "@/domain/money";
 import { mondayOf, toIsoDate, weekDates } from "@/domain/time";
 import { useLessonMutations } from "@/data/hooks";
 import { WeekTimeline } from "@/features/manager/WeekTimeline";
+import { DayAgenda } from "@/features/manager/DayAgendaPanel";
 import { DayTimeline } from "@/features/manager/DayTimeline";
 import { DayDateStrip } from "@/features/manager/DayDateStrip";
 import { ScheduleToolbar } from "@/features/manager/ScheduleToolbar";
-import { useIsNarrow } from "@/features/manager/useIsNarrow";
 import {
   buildDayIssueMarkers,
   resolveInitialDayDate,
@@ -142,8 +142,6 @@ function ManagerScreen() {
     lessonIds: string[];
     nonce: number;
   } | null>(null);
-  const isNarrow = useIsNarrow();
-
   const days = useMemo(() => weekDates(parseISO(anchorDate)), [anchorDate]);
   const tourLessonId = useMemo(
     () =>
@@ -171,9 +169,9 @@ function ManagerScreen() {
   const shiftWeek = (weeks: number) =>
     setAnchorDate(toIsoDate(addDays(mondayOf(parseISO(anchorDate)), weeks * 7)));
 
-  // The spatial timeline is a desktop instrument, and the guided tour walks
-  // the week agenda — either one keeps the schedule in Week View.
-  const canUseDayView = !isNarrow && !tourActive;
+  // Day View is available at every width. The guided tour walks the week
+  // agenda, so an active tour stays in Week View.
+  const canUseDayView = !tourActive;
   const mode: ScheduleViewMode = canUseDayView ? viewMode : "week";
   const dayLabel = format(parseISO(dayDate), "EEE d MMM yyyy", { locale: dateLocale });
   const dayLabelCompact = format(parseISO(dayDate), "EEE d MMM", { locale: dateLocale });
@@ -266,8 +264,8 @@ function ManagerScreen() {
   /**
    * The single route behind every "show me this problem" control: open Day
    * View on the issue's date, make its teacher visible without discarding the
-   * manager's other filters, and leave a static ring on both lessons. On a
-   * phone, and during the tour, the week agenda keeps its own behaviour.
+   * manager's other filters, and leave a static ring on both lessons. During
+   * the guided tour the week agenda keeps its own behaviour.
    */
   const navigateToIssue = (lessonIds: readonly string[]) => {
     if (!canUseDayView) return false;
@@ -472,20 +470,35 @@ function ManagerScreen() {
               today={today}
               onSelect={goToDay}
             />
-            <DayTimeline
-              lessons={filtered}
-              date={dayDate}
-              today={today}
-              teacherIds={dayTeacherIds}
-              lookups={lookups}
-              conflictsByLesson={byLesson}
-              travelConflicts={travelConflicts}
-              focusedLessonIds={activeDayFocus?.lessonIds ?? null}
-              focusNonce={activeDayFocus?.nonce ?? 0}
-              selectedLessonId={selectedLesson?.id ?? null}
-              onSelectLesson={selectLesson}
-              onMoveLesson={moveLesson}
-            />
+            <div className="day-board">
+              <DayAgenda
+                lessons={filtered}
+                date={dayDate}
+                teacherIds={dayTeacherIds}
+                lookups={lookups}
+                conflictsByLesson={byLesson}
+                focusedLessonIds={activeDayFocus?.lessonIds ?? null}
+                focusNonce={activeDayFocus?.nonce ?? 0}
+                selectedLessonId={selectedLesson?.id ?? null}
+                lockLessonSelection={tourLessonLock}
+                onSelectLesson={selectLesson}
+              />
+              <DayTimeline
+                lessons={filtered}
+                date={dayDate}
+                today={today}
+                teacherIds={dayTeacherIds}
+                lookups={lookups}
+                conflictsByLesson={byLesson}
+                travelConflicts={travelConflicts}
+                focusedLessonIds={activeDayFocus?.lessonIds ?? null}
+                focusNonce={activeDayFocus?.nonce ?? 0}
+                selectedLessonId={selectedLesson?.id ?? null}
+                lockLessonSelection={tourLessonLock}
+                onSelectLesson={selectLesson}
+                onMoveLesson={moveLesson}
+              />
+            </div>
           </div>
         ) : (
           <WeekTimeline

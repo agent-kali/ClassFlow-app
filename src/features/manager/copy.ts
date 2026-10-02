@@ -1,3 +1,4 @@
+import { formatDuration } from "@/domain/time";
 import type { Locale } from "@/features/landing/locale";
 
 export interface ManagerChromeCopy {
@@ -53,6 +54,18 @@ export interface ManagerChromeCopy {
   ariaShowFirstTravelGaps: (count: number) => string;
   ariaShowNextTravelGap: (current: number, total: number) => string;
   dayTabAria: (weekday: string, count: number, issue: string | null) => string;
+  teacherColumn: string;
+  teacherFree: string;
+  lessonCount: (count: number) => string;
+  dayScheduleAria: (date: string) => string;
+  dayAgendaTitle: string;
+  dayAgendaAria: string;
+  campusChange: string;
+  noTeachersSelected: string;
+  lessonFallback: string;
+  completed: string;
+  selected: string;
+  duration: (minutes: number) => string;
 }
 
 const en: ManagerChromeCopy = {
@@ -111,6 +124,18 @@ const en: ManagerChromeCopy = {
     `Show next tight travel gap, currently ${current} of ${total}`,
   dayTabAria: (weekday, count, issue) =>
     `${weekday}, ${count} lesson${count === 1 ? "" : "s"}` + (issue ? `, has a ${issue}` : ""),
+  teacherColumn: "Teacher",
+  teacherFree: "Free",
+  lessonCount: (count) => `${count} lesson${count === 1 ? "" : "s"}`,
+  dayScheduleAria: (date) => `Day schedule, ${date}`,
+  dayAgendaTitle: "Lessons",
+  dayAgendaAria: "Day lessons",
+  campusChange: "Campus change",
+  noTeachersSelected: "No teachers selected. Pick a teacher in the filters to see the day.",
+  lessonFallback: "Lesson",
+  completed: "completed",
+  selected: "selected",
+  duration: (minutes) => formatDuration(minutes),
 };
 
 const vi: ManagerChromeCopy = {
@@ -170,6 +195,25 @@ const vi: ManagerChromeCopy = {
     `Hiện khoảng di chuyển sát tiếp theo, đang ${current} / ${total}`,
   dayTabAria: (weekday, count, issue) =>
     `${weekday}, ${count} buổi` + (issue ? `, có ${issue}` : ""),
+  teacherColumn: "Giáo viên",
+  teacherFree: "Trống",
+  lessonCount: (count) => `${count} buổi`,
+  dayScheduleAria: (date) => `Lịch ngày, ${date}`,
+  dayAgendaTitle: "Các buổi",
+  dayAgendaAria: "Các buổi trong ngày",
+  campusChange: "Đổi cơ sở",
+  noTeachersSelected: "Chưa chọn giáo viên. Chọn giáo viên trong bộ lọc để xem ngày.",
+  lessonFallback: "Buổi học",
+  completed: "đã xong",
+  selected: "đang chọn",
+  duration: (minutes) => {
+    const total = Math.round(minutes);
+    const hours = Math.floor(total / 60);
+    const mins = total % 60;
+    if (hours === 0) return `${mins} phút`;
+    if (mins === 0) return `${hours} giờ`;
+    return `${hours} giờ ${mins} phút`;
+  },
 };
 
 export const managerCopy: Record<Locale, ManagerChromeCopy> = { en, vi };

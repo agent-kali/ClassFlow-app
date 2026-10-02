@@ -4,10 +4,11 @@ import type { CSSProperties } from "react";
 import type { Lesson } from "@/domain/types";
 import type { Conflict } from "@/domain/conflicts";
 import type { useLookups } from "@/data/hooks";
-import { formatAgendaMin, formatDuration } from "@/domain/time";
+import { formatAgendaMin } from "@/domain/time";
 import { useLocale } from "@/features/landing/locale";
+import { agendaStatuses, agendaStatusTexts } from "./dayAgenda";
 import { getManagerCopy } from "./copy";
-import { accentForSchool, hasOverlapConflict, isLessonPast } from "./lessonCardModel";
+import { accentForSchool, isLessonPast } from "./lessonCardModel";
 import {
   DAY_BLOCK_HEIGHT,
   TIER_STATUS_PX,
@@ -62,10 +63,17 @@ export function DayLessonBlock({
 
   const isOff = lesson.status !== "scheduled";
   const isPast = isLessonPast(lesson, today, nowMin) || isOff;
-  const hasConflict = !isOff && hasOverlapConflict(conflicts);
-  const travelConflict = !isOff ? conflicts.find((c) => c.type === "travel") : undefined;
+  const statuses = agendaStatuses(lesson, conflicts);
+  const hasConflict = statuses.some((status) => status.kind === "double-booking");
+  const hasTravel = statuses.some((status) => status.kind === "tight-travel");
+  const statusTexts = agendaStatusTexts(statuses, {
+    cancelled: copy.cancelledCard,
+    noShow: copy.noShowCard,
+    doubleBooking: copy.doubleBookingCard,
+    tightTravel: copy.tightTravelCard,
+  });
 
-  const classCode = group?.code ?? "Lesson";
+  const classCode = group?.code ?? copy.lessonFallback;
   const timeLabel = `${formatAgendaMin(lesson.startMin)} — ${formatAgendaMin(lesson.endMin)}`;
   const campusName = campus?.name ?? school?.shortName;
   const where = [campusName, room?.name].filter(Boolean).join(" · ");
@@ -73,24 +81,42 @@ export function DayLessonBlock({
   const pxWidth = block.width * trackWidthPx;
   const tier: DayBlockTier = metadataTier(pxWidth);
   // The narrowest legible block still names its campus; the room is the first
-  // thing to go, because the popover is one click away.
+  // thing to go. The agenda beside the scale carries the full names.
   const whereShown = tier === "narrow" ? campusName : where;
 
-  const statusKind = hasConflict ? "conflict" : travelConflict ? "travel" : null;
-  const statusText = hasConflict
-    ? copy.doubleBookingCard
-    : travelConflict
-      ? copy.tightTravelShort
-      : null;
-  const spellOutStatus = tier === "full" && pxWidth >= TIER_STATUS_PX;
+  const blockStatusKind =
+    statuses[0]?.kind === "cancelled"
+      ? "cancelled"
+      : statuses[0]?.kind === "no-show"
+        ? "noshow"
+        : hasConflict
+          ? "conflict"
+          : hasTravel
+            ? "travel"
+            : null;
+  const blockStatusText =
+    blockStatusKind === "cancelled"
+      ? copy.cancelledCard
+      : blockStatusKind === "noshow"
+        ? copy.noShowCard
+        : blockStatusKind === "conflict"
+          ? copy.doubleBookingCard
+          : blockStatusKind === "travel"
+            ? copy.tightTravelShort
+            : null;
+  const spellOutStatus = tier === "full" && pxWidth >= TIER_STATUS_PX && !!blockStatusText;
 
-  const label =
-    `${classCode}, ${timeLabel}, ${formatDuration(lesson.endMin - lesson.startMin)}` +
-    (where ? `, ${where}` : "") +
-    (hasConflict ? ", conflict — double booking" : "") +
-    (travelConflict ? `, tight travel, ${travelConflict.gapMin} minutes` : "") +
-    (isOff ? `, ${lesson.status}` : isPast ? ", completed" : "") +
-    (isSelected ? ", selected" : "");
+  const label = [
+    classCode,
+    timeLabel,
+    copy.duration(lesson.endMin - lesson.startMin),
+    where,
+    ...statusTexts,
+    !isOff && isPast ? copy.completed : "",
+    isSelected ? copy.selected : "",
+  ]
+    .filter(Boolean)
+    .join(", ");
 
   return (
     <div
@@ -107,8 +133,9 @@ export function DayLessonBlock({
       data-lesson-id={lesson.id}
       data-tier={tier}
       data-past={isPast || undefined}
+      data-status={isOff ? lesson.status : undefined}
       data-conflict={hasConflict || undefined}
-      data-travel={travelConflict ? true : undefined}
+      data-travel={hasTravel || undefined}
       data-selected={isSelected || undefined}
       data-focused={isFocused || undefined}
       data-dragging={isDragging || undefined}
@@ -137,24 +164,14 @@ export function DayLessonBlock({
           {tier === "full" && (
             <span className="day-lesson__top">
               <span className="day-lesson__time cf-mono">{timeLabel}</span>
-              {spellOutStatus && statusText && (
-                <span className={`day-lesson__status day-lesson__status--${statusKind}`}>
-                  {statusText}
+              {spellOutStatus && blockStatusText && (
+                <span className={`day-lesson__status day-lesson__status--${blockStatusKind}`}>
+                  {blockStatusText}
                 </span>
               )}
             </span>
           )}
-          <span className="day-lesson__class">
-            {classCode}
-            {!spellOutStatus && statusKind && (
-              <span
-                className={`day-lesson__flag day-lesson__flag--${statusKind}`}
-                aria-hidden
-              >
-                !
-              </span>
-            )}
-          </span>
+          <span className="day-lesson__class">{classCode}</span>
           {whereShown && <span className="day-lesson__where">{whereShown}</span>}
         </span>
       )}

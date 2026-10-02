@@ -4,9 +4,12 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { Lesson } from "@/domain/types";
 import { detectConflicts, isTeacherOverlap, type Conflict } from "@/domain/conflicts";
 import type { useLookups } from "@/data/hooks";
-import { formatAgendaMin, formatDuration, nowMinOn } from "@/domain/time";
+import { formatAgendaMin, nowMinOn } from "@/domain/time";
+import { useLocale } from "@/features/landing/locale";
 import { TOUR_BLOCK_ALL_LESSONS } from "@/features/tour/lessonLock";
 import { DayLessonBlock } from "./DayLessonBlock";
+import { getManagerCopy } from "./copy";
+import { scrollGroupWithin } from "./scrollWithin";
 import { travelGapKey, type TravelConflict } from "./travelGap";
 import {
   DAY_BLOCK_HEIGHT,
@@ -86,6 +89,8 @@ export function DayTimeline({
   onMoveLesson,
 }: Props) {
   const now = useNowMinute();
+  const [locale] = useLocale();
+  const copy = getManagerCopy(locale);
   const scrollerRef = useRef<HTMLDivElement>(null);
   const trackRef = useRef<HTMLDivElement>(null);
   const suppressClickRef = useRef(false);
@@ -129,26 +134,34 @@ export function DayTimeline({
     [focusedLessonIds]
   );
 
+  const measuredTeacherId = rows[0]?.teacherId ?? "";
   useLayoutEffect(() => {
     const el = trackRef.current;
     if (!el) return;
-    // clientWidth, not a bounding rect: it reports layout pixels even when an
-    // ancestor is scaled, so the metadata tiers stay honest.
+    // clientWidth of the lesson track, not the page: drag and text tiers use
+    // the same pixels the blocks are positioned against.
     const sync = () => setTrackWidth(el.clientWidth);
     sync();
     const observer = new ResizeObserver(sync);
     observer.observe(el);
     return () => observer.disconnect();
-  }, []);
+  }, [measuredTeacherId]);
 
-  // Bring a focused conflict into view without touching any card's geometry.
+  // Bring a focused conflict into this scroller only, so the page does not jump.
   useEffect(() => {
     if (!focusedLessonIds?.length || focusNonce === 0) return;
     const timer = window.setTimeout(() => {
-      const el = scrollerRef.current?.querySelector(
-        `[data-lesson-id="${CSS.escape(focusedLessonIds[0])}"]`
-      );
-      el?.scrollIntoView({ block: "center", inline: "nearest", behavior: "auto" });
+      const container = scrollerRef.current;
+      if (!container) return;
+      const nodes = focusedLessonIds.flatMap((id) => {
+        const el = container.querySelector(`[data-lesson-id="${CSS.escape(id)}"]`);
+        return el instanceof HTMLElement ? [el] : [];
+      });
+      const styles = getComputedStyle(container);
+      scrollGroupWithin(container, nodes, {
+        top: parseFloat(styles.getPropertyValue("--day-head-h")) || 0,
+        left: parseFloat(styles.getPropertyValue("--day-teacher-w")) || 0,
+      });
     }, 30);
     return () => clearTimeout(timer);
   }, [focusedLessonIds, focusNonce]);
@@ -269,17 +282,18 @@ export function DayTimeline({
   return (
     <div
       ref={scrollerRef}
-      className="day-timeline flex-1 overflow-y-auto overflow-x-hidden"
+      className="day-timeline"
       role="region"
-      aria-label={`Day schedule, ${date}`}
+      aria-label={copy.dayScheduleAria(date)}
     >
+      <div className="day-timeline__sheet">
       <div className="day-timeline__head">
         <div className="day-timeline__corner">
           <span className="cf-mono text-[10px] uppercase tracking-wider text-ink-faint">
-            Teacher
+            {copy.teacherColumn}
           </span>
         </div>
-        <div ref={trackRef} className="day-timeline__times">
+        <div className="day-timeline__times">
           {rules.map((rule) => (
             <span
               key={rule.min}
@@ -303,10 +317,11 @@ export function DayTimeline({
         </div>
       </div>
 
-      {rows.map((row) => {
+      {rows.map((row, rowIndex) => {
         const teacher = lookups.teachersById.get(row.teacherId);
         const segments = travelByTeacher.get(row.teacherId) ?? [];
         const dragging = drag && drag.lesson.teacherId === row.teacherId ? drag : null;
+        const measureTrack = rowIndex === 0;
 
         return (
           <div
@@ -319,13 +334,15 @@ export function DayTimeline({
               <span className="day-timeline__teacher-code cf-mono">{teacher?.code ?? "—"}</span>
               <span className="day-timeline__teacher-name">{teacher?.name ?? ""}</span>
               <span className="day-timeline__teacher-count cf-mono">
-                {row.blocks.length === 0
-                  ? "free"
-                  : `${row.blocks.length} lesson${row.blocks.length > 1 ? "s" : ""}`}
+                {row.blocks.length === 0 ? copy.teacherFree : copy.lessonCount(row.blocks.length)}
               </span>
             </div>
 
-            <div className="day-timeline__track">
+            <div
+              ref={measureTrack ? trackRef : undefined}
+              className="day-timeline__track"
+              data-track-px={measureTrack ? Math.round(trackWidth) : undefined}
+            >
               {rules.map((rule) => (
                 <span
                   key={rule.min}
@@ -344,8 +361,9 @@ export function DayTimeline({
 
               {segments.map((segment) => {
                 const tier = travelTier(segment.width * trackWidth);
-                const gap = formatDuration(segment.gapMin);
+                const gap = copy.duration(segment.gapMin);
                 const full = `${segment.fromCampus} → ${segment.toCampus} · ${gap}`;
+                const hop = segment.tight ? copy.tightTravelShort : copy.campusChange;
                 return (
                   <span
                     key={segment.key}
@@ -361,8 +379,8 @@ export function DayTimeline({
                         (DAY_BLOCK_HEIGHT - DAY_TRAVEL_BAND_HEIGHT) / 2,
                       height: DAY_TRAVEL_BAND_HEIGHT,
                     }}
-                    title={`${segment.tight ? "Tight travel" : "Campus change"} — ${full}`}
-                    aria-label={`${segment.tight ? "Tight travel" : "Campus change"}, ${full}`}
+                    title={`${hop} — ${full}`}
+                    aria-label={`${hop}, ${full}`}
                   >
                     <span className="day-timeline__travel-label cf-mono">
                       {tier === "wide" ? full : tier === "medium" ? gap : ""}
@@ -372,7 +390,7 @@ export function DayTimeline({
               })}
 
               {row.blocks.length === 0 && (
-                <span className="day-timeline__free">No lessons</span>
+                <span className="day-timeline__free">{copy.noLessons}</span>
               )}
 
               {row.blocks.map((block) => (
@@ -409,8 +427,8 @@ export function DayTimeline({
                 >
                   <span className="day-timeline__ghost-label cf-mono">
                     {formatAgendaMin(preview.startMin)}–{formatAgendaMin(preview.endMin)}
-                    {previewWarning === "conflict" && " · double booking"}
-                    {previewWarning === "travel" && " · tight travel"}
+                    {previewWarning === "conflict" && ` · ${copy.doubleBookingCard}`}
+                    {previewWarning === "travel" && ` · ${copy.tightTravelShort}`}
                   </span>
                 </span>
               )}
@@ -420,10 +438,9 @@ export function DayTimeline({
       })}
 
       {rows.length === 0 && (
-        <div className="day-timeline__vacant">
-          No teachers selected. Pick a teacher in the filters to see the day.
-        </div>
+        <div className="day-timeline__vacant">{copy.noTeachersSelected}</div>
       )}
+      </div>
     </div>
   );
 }
