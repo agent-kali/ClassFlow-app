@@ -6,20 +6,40 @@ import type { NextConfig } from "next";
  * CORS entirely, so no CORS middleware is needed on the backend.
  */
 const LOCAL_ORIGIN = "http://127.0.0.1:8000";
-// Public Render API. Used only when a Vercel build has no BACKEND_ORIGIN set,
-// so the rewrite is https instead of failing the deployment.
-const VERCEL_API_ORIGIN = "https://classflow-api-p7j1.onrender.com";
 
-const configuredOrigin = process.env.BACKEND_ORIGIN;
-const onVercel = process.env.VERCEL === "1";
-const BACKEND_ORIGIN =
-  configuredOrigin ?? (onVercel ? VERCEL_API_ORIGIN : LOCAL_ORIGIN);
-
-// The rewrite destination is fixed at build time. On Vercel, an http origin
-// would send passwords from Vercel to the API in the clear.
-if (onVercel && !BACKEND_ORIGIN.startsWith("https://")) {
-  throw new Error("BACKEND_ORIGIN must be an https URL when building on Vercel.");
+/**
+ * Vercel bakes the rewrite destination into the deployment. A missing origin
+ * must not fall back to a URL stored in git, and an http origin would send
+ * passwords from Vercel to the API in the clear. Local development still
+ * falls back to the loopback API when BACKEND_ORIGIN is unset.
+ */
+function resolveBackendOrigin(): string {
+  const configured = process.env.BACKEND_ORIGIN?.trim();
+  if (process.env.VERCEL !== "1") {
+    return configured || LOCAL_ORIGIN;
+  }
+  if (!configured) {
+    throw new Error(
+      "BACKEND_ORIGIN is missing. Set BACKEND_ORIGIN to an https URL before building on Vercel.",
+    );
+  }
+  let url: URL;
+  try {
+    url = new URL(configured);
+  } catch {
+    throw new Error(
+      "BACKEND_ORIGIN must be an https URL when building on Vercel.",
+    );
+  }
+  if (url.protocol !== "https:" || url.hostname === "") {
+    throw new Error(
+      "BACKEND_ORIGIN must be an https URL when building on Vercel.",
+    );
+  }
+  return configured;
 }
+
+const BACKEND_ORIGIN = resolveBackendOrigin();
 
 const nextConfig: NextConfig = {
   async rewrites() {
