@@ -22,10 +22,12 @@ import { formatUsd } from "@/domain/money";
 import { mondayOf, toIsoDate, weekDates } from "@/domain/time";
 import { useLessonMutations } from "@/data/hooks";
 import { WeekTimeline } from "@/features/manager/WeekTimeline";
-import { DayAgenda } from "@/features/manager/DayAgendaPanel";
+import { DayLedger } from "@/features/manager/DayLedger";
 import { DayTimeline } from "@/features/manager/DayTimeline";
 import { DayDateStrip } from "@/features/manager/DayDateStrip";
+import { DaySurfaceToggle, type DaySurface } from "@/features/manager/DaySurfaceToggle";
 import { ScheduleToolbar } from "@/features/manager/ScheduleToolbar";
+import { useIsNarrow } from "@/features/manager/useIsNarrow";
 import {
   buildDayIssueMarkers,
   resolveInitialDayDate,
@@ -136,6 +138,9 @@ function ManagerScreen() {
 
   const [viewMode, setViewMode] = useState<ScheduleViewMode>("week");
   const [dayDate, setDayDate] = useState(today);
+  /** List is the reading path. Scale is a desktop tool and starts closed. */
+  const [daySurface, setDaySurface] = useState<DaySurface>("list");
+  const isNarrow = useIsNarrow();
   /** The lesson pair a conflict jump put under the manager's eye, and the day it lives on. */
   const [dayFocus, setDayFocus] = useState<{
     date: string;
@@ -199,11 +204,12 @@ function ManagerScreen() {
           weekDays: days,
         })
       );
+      setDaySurface("list");
     }
     setViewMode(next);
   };
 
-  /** Rows are every selected teacher — an empty row still says "available". */
+  /** Teachers still in the filter. The scale keeps a free row; the list does not. */
   const dayTeacherIds = useMemo(() => {
     const ordered = [...teachers].sort((a, b) => a.code.localeCompare(b.code));
     const selected = filters.teacherIds;
@@ -283,6 +289,7 @@ function ManagerScreen() {
     ensureIncluded("schoolIds", nav.widen.schoolIds);
     setSelection(null);
     setOverlapFocusState(null);
+    setDaySurface("list");
     setViewMode("day");
     goToDay(nav.date);
     setDayFocus({
@@ -463,26 +470,17 @@ function ManagerScreen() {
           onMobileClose={() => setRailOpen(false)}
         />
         {mode === "day" ? (
-          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden">
-            <DayDateStrip
-              markers={dayMarkers}
-              selected={dayDate}
-              today={today}
-              onSelect={goToDay}
-            />
-            <div className="day-board">
-              <DayAgenda
-                lessons={filtered}
-                date={dayDate}
-                teacherIds={dayTeacherIds}
-                lookups={lookups}
-                conflictsByLesson={byLesson}
-                focusedLessonIds={activeDayFocus?.lessonIds ?? null}
-                focusNonce={activeDayFocus?.nonce ?? 0}
-                selectedLessonId={selectedLesson?.id ?? null}
-                lockLessonSelection={tourLessonLock}
-                onSelectLesson={selectLesson}
+          <div className="day-view flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden">
+            <div className="day-chrome">
+              <DayDateStrip
+                markers={dayMarkers}
+                selected={dayDate}
+                today={today}
+                onSelect={goToDay}
               />
+              <DaySurfaceToggle surface={daySurface} onChange={setDaySurface} />
+            </div>
+            {!isNarrow && daySurface === "scale" ? (
               <DayTimeline
                 lessons={filtered}
                 date={dayDate}
@@ -498,7 +496,21 @@ function ManagerScreen() {
                 onSelectLesson={selectLesson}
                 onMoveLesson={moveLesson}
               />
-            </div>
+            ) : (
+              <DayLedger
+                lessons={filtered}
+                date={dayDate}
+                today={today}
+                teacherIds={dayTeacherIds}
+                lookups={lookups}
+                conflictsByLesson={byLesson}
+                focusedLessonIds={activeDayFocus?.lessonIds ?? null}
+                focusNonce={activeDayFocus?.nonce ?? 0}
+                selectedLessonId={selectedLesson?.id ?? null}
+                lockLessonSelection={tourLessonLock}
+                onSelectLesson={selectLesson}
+              />
+            )}
           </div>
         ) : (
           <WeekTimeline

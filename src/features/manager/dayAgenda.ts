@@ -4,7 +4,7 @@ import { hasOverlapConflict, sortLessonsChronologically } from "./lessonCardMode
 
 /**
  * The readable day list. It names each lesson in full and never changes the
- * lesson's times — the timeline still owns position and duration.
+ * lesson's times. A clock scale, when the manager opens one, is a separate tool.
  */
 
 export type AgendaStatus =
@@ -108,4 +108,94 @@ export function buildDayAgenda(
     roomName: sources.roomName(lesson.roomId) ?? "",
     statuses: agendaStatuses(lesson, conflictsByLesson.get(lesson.id) ?? []),
   }));
+}
+
+export interface DayCues {
+  /** Scheduled lessons in progress on the open day, when that day is today. */
+  nowIds: string[];
+  /** Scheduled lessons that share the next start, when nothing is in progress. */
+  nextIds: string[];
+}
+
+/**
+ * Which rows answer "what is happening, or what is next?"
+ * Only the open day, and only when it is today. Cancelled and no-show lessons
+ * are not happening, and a finished lesson is not next.
+ */
+export function resolveDayCues(
+  items: readonly { lesson: Pick<Lesson, "id" | "status" | "startMin" | "endMin"> }[],
+  date: string,
+  today: string,
+  nowMin: number | null
+): DayCues {
+  if (date !== today || nowMin === null) return { nowIds: [], nextIds: [] };
+
+  const scheduled = items
+    .map((item, index) => ({ item, index }))
+    .filter(({ item }) => item.lesson.status === "scheduled")
+    .sort(
+      (a, b) => a.item.lesson.startMin - b.item.lesson.startMin || a.index - b.index
+    )
+    .map(({ item }) => item);
+
+  const nowIds = scheduled
+    .filter((item) => item.lesson.startMin <= nowMin && item.lesson.endMin > nowMin)
+    .map((item) => item.lesson.id);
+  if (nowIds.length > 0) return { nowIds, nextIds: [] };
+
+  const upcoming = scheduled.filter((item) => item.lesson.startMin > nowMin);
+  if (upcoming.length === 0) return { nowIds: [], nextIds: [] };
+  const nextStart = upcoming[0].lesson.startMin;
+  return {
+    nowIds: [],
+    nextIds: upcoming
+      .filter((item) => item.lesson.startMin === nextStart)
+      .map((item) => item.lesson.id),
+  };
+}
+
+/** A tight hop drawn between the two lessons it separates. */
+export interface TightTravelConnector {
+  beforeLessonId: string;
+  fromLessonId: string;
+  gapMin: number;
+  fromCampus: string;
+  toCampus: string;
+}
+
+/**
+ * One connector per tight-travel conflict whose both lessons are still in the
+ * list and still scheduled. It sits in front of the later lesson. Same-campus
+ * gaps and gaps the domain does not call tight produce nothing here.
+ */
+export function buildTightTravelConnectors(
+  items: readonly DayAgendaItem[],
+  conflictsByLesson: Map<string, Conflict[]>
+): TightTravelConnector[] {
+  const byId = new Map(items.map((item) => [item.lesson.id, item]));
+  const seen = new Set<string>();
+  const connectors: TightTravelConnector[] = [];
+
+  for (const item of items) {
+    for (const conflict of conflictsByLesson.get(item.lesson.id) ?? []) {
+      if (conflict.type !== "travel") continue;
+      const [fromId, toId] = conflict.lessonIds;
+      const key = `${fromId}|${toId}`;
+      if (seen.has(key)) continue;
+      const from = byId.get(fromId);
+      const to = byId.get(toId);
+      if (!from || !to) continue;
+      if (from.lesson.status !== "scheduled" || to.lesson.status !== "scheduled") continue;
+      seen.add(key);
+      connectors.push({
+        beforeLessonId: to.lesson.id,
+        fromLessonId: from.lesson.id,
+        gapMin: conflict.gapMin,
+        fromCampus: from.campusName,
+        toCampus: to.campusName,
+      });
+    }
+  }
+
+  return connectors;
 }

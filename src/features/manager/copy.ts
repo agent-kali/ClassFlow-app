@@ -58,8 +58,15 @@ export interface ManagerChromeCopy {
   teacherFree: string;
   lessonCount: (count: number) => string;
   dayScheduleAria: (date: string) => string;
-  dayAgendaTitle: string;
   dayAgendaAria: string;
+  daySurfaceGroup: string;
+  listView: string;
+  scaleView: string;
+  listHint: string;
+  scaleHint: string;
+  nowCue: string;
+  nextCue: string;
+  tightTravelBetween: (gapMin: number, fromCampus: string, toCampus: string) => string;
   campusChange: string;
   noTeachersSelected: string;
   lessonFallback: string;
@@ -128,8 +135,16 @@ const en: ManagerChromeCopy = {
   teacherFree: "Free",
   lessonCount: (count) => `${count} lesson${count === 1 ? "" : "s"}`,
   dayScheduleAria: (date) => `Day schedule, ${date}`,
-  dayAgendaTitle: "Lessons",
   dayAgendaAria: "Day lessons",
+  daySurfaceGroup: "Day surface",
+  listView: "List",
+  scaleView: "Scale",
+  listHint: "Read the day in order",
+  scaleHint: "Drag a lesson along the clock",
+  nowCue: "Now",
+  nextCue: "Next",
+  tightTravelBetween: (gapMin, fromCampus, toCampus) =>
+    `Tight travel · ${gapMin} min · ${fromCampus} → ${toCampus}`,
   campusChange: "Campus change",
   noTeachersSelected: "No teachers selected. Pick a teacher in the filters to see the day.",
   lessonFallback: "Lesson",
@@ -199,8 +214,16 @@ const vi: ManagerChromeCopy = {
   teacherFree: "Trống",
   lessonCount: (count) => `${count} buổi`,
   dayScheduleAria: (date) => `Lịch ngày, ${date}`,
-  dayAgendaTitle: "Các buổi",
   dayAgendaAria: "Các buổi trong ngày",
+  daySurfaceGroup: "Cách xem ngày",
+  listView: "Danh sách",
+  scaleView: "Thang giờ",
+  listHint: "Đọc các buổi theo giờ",
+  scaleHint: "Kéo buổi học trên thang giờ",
+  nowCue: "Đang học",
+  nextCue: "Kế tiếp",
+  tightTravelBetween: (gapMin, fromCampus, toCampus) =>
+    `Di chuyển sát · ${gapMin} phút · ${fromCampus} → ${toCampus}`,
   campusChange: "Đổi cơ sở",
   noTeachersSelected: "Chưa chọn giáo viên. Chọn giáo viên trong bộ lọc để xem ngày.",
   lessonFallback: "Buổi học",
